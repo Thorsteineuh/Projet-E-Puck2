@@ -13,13 +13,22 @@
 #include <chprintf.h>
 #include <selector.h>
 #include <sensors/VL53L0X/VL53L0X.h>
+#include <camera/po8030.h>
 
 //--------------------------------- Include of homemade files -----------------------------------
 
 #include <motor.h>
 #include <piano.h>
+#include <process_image.h>
 
 //----------------------------------------- Functions ------------------------------------------
+
+void SendUint8ToComputer(uint8_t* data, uint16_t size)
+{
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)"START", 5);
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)&size, sizeof(uint16_t));
+	chSequentialStreamWrite((BaseSequentialStream *)&SD3, (uint8_t*)data, size);
+}
 
 static void serial_start(void)
 {
@@ -50,14 +59,20 @@ int main(void)
     // Activate piano module (IR and buzzer)
     piano_init();
 
+    //starts the camera
+    dcmi_start();
+	po8030_start();
+	process_image_start();
+
     //motor_set_position(10,10,5,5);
 
     /* Infinite loop. */
     while(1){
-    	int speed = get_selector();
-    	motors_set_speed(speed,speed);
-        //chprintf((BaseSequentialStream *)&SD3, "Ambient = %d Prox = %d Calibrated Prox = %d \r", amb,prox,calProx);
-    	chThdSleep(MS2ST(100));
+    	//int speed = get_selector();
+    	//motors_set_speed(speed,speed);
+    	//float val = VL53L0X_get_dist_mm()*0.9;
+        //chprintf((BaseSequentialStream *)&SD3, "Distance = %f \r", val);
+    	chThdSleepMilliseconds(1000);
     }
 }
 
