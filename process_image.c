@@ -7,10 +7,13 @@
 #include <camera/po8030.h>
 
 #include <process_image.h>
+#include <sensors/VL53L0X/VL53L0X.h>
 
 
-#define VAL_THRES 0		//a def
+#define VAL_THRES 10		//a def
 #define MID_THRES 20
+#define MM_THRES 4
+#define ANGLE_CORR 0.9063	// = cos(25)
 
 static float distance_cm = 0;
 
@@ -76,10 +79,27 @@ static THD_FUNCTION(ProcessImage, arg) {
 		}
 		else send = true;
 
-		chprintf((BaseSequentialStream *)&SDU1, "largeur red = %d ", image_analysis(red, IMAGE_BUFFER_SIZE));
-		chprintf((BaseSequentialStream *)&SDU1, "largeur green = %d ", image_analysis(green, IMAGE_BUFFER_SIZE));
-		chprintf((BaseSequentialStream *)&SDU1, "largeur blue = %d \r", image_analysis(blue, IMAGE_BUFFER_SIZE));
+		uint16_t r_width = image_analysis(red, IMAGE_BUFFER_SIZE);
+		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE);
+		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE);
 
+		//chprintf((BaseSequentialStream *)&SDU1, "largeur red = %d ", r_width);
+		//chprintf((BaseSequentialStream *)&SDU1, "largeur green = %d ", g_width);
+		//chprintf((BaseSequentialStream *)&SDU1, "largeur blue = %d \r", b_width);
+
+		if (g_width == 0 && r_width>0 && b_width>0) chprintf((BaseSequentialStream *)&SDU1, "c'est une cible verte \r");
+		if (r_width == 0 && g_width>0 && b_width>0) chprintf((BaseSequentialStream *)&SDU1, "c'est une cible rouge \r");
+		if (b_width == 0 && r_width>0 && g_width>0) chprintf((BaseSequentialStream *)&SDU1, "c'est une cible bleue \r");
+
+		if (g_width>0 && r_width>0 && b_width>0) {
+			uint16_t dist_mm = VL53L0X_get_dist_mm() * ANGLE_CORR;
+			uint8_t width_mm = g_width * dist_mm * 0.414 * 2 / IMAGE_BUFFER_SIZE;		//ici 0.414 = tan(22.5)
+			chprintf((BaseSequentialStream *)&SDU1, "largeur = %d mm \r", width_mm);
+
+			//if (abs(width_mm-30)<MM_THRES) chprintf((BaseSequentialStream *)&SDU1, "c'est un petit cylindre \r");
+			//if (abs(width_mm-40)<MM_THRES) chprintf((BaseSequentialStream *)&SDU1, "c'est un moyen cylindre \r");
+			//if (abs(width_mm-50)<MM_THRES) chprintf((BaseSequentialStream *)&SDU1, "c'est un grand cylindre \r");
+		}
     }
 }
 
