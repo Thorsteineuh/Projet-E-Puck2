@@ -17,8 +17,7 @@
 
 //--------------------------------- Include of homemade files -----------------------------------
 
-#include <motor.h>
-#include <piano.h>
+#include <movements.h>
 #include <process_image.h>
 
 //----------------------------------------- Functions ------------------------------------------
@@ -53,26 +52,37 @@ int main(void)
     serial_start();
     usb_start();
     // Activate ToF module
-    VL53L0X_start();
+    //VL53L0X_start();
     // Activate motors module
-    motor_init();
+    mvt_init();
     // Activate piano module (IR and buzzer)
-    piano_init();
+    //piano_init();
 
     //starts the camera
-    dcmi_start();
-	po8030_start();
-	process_image_start();
+    //dcmi_start();
+	//po8030_start();
+	//process_image_start();
 
     //motor_set_position(10,10,5,5);
 
     /* Infinite loop. */
+	int state = 1;
     while(1){
-    	//int speed = get_selector();
-    	//motors_set_speed(speed,speed);
+    	if(get_selector() == 0){
+			switch(state){
+			case -1:chThdSleepMilliseconds(1000);state++;break;
+			case 0: if(mvt_move(10,10))state++;break;
+			case 1: if(mvt_turn(5,180,10))state=0;break;
+			default: break;
+			}
+    	} else {
+    		state = -1;
+    		mvt_stop();
+    	}
+    	//motor_set_position(20,20,speed,speed);
     	//float val = VL53L0X_get_dist_mm()*0.9;
         //chprintf((BaseSequentialStream *)&SD3, "Distance = %f \r", val);
-    	chThdSleepMilliseconds(1000);
+    	//chThdSleepMilliseconds(1000);
     }
 }
 
