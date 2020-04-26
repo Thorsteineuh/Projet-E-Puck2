@@ -17,6 +17,7 @@
 
 //--------------------------------- Include of homemade files -----------------------------------
 
+#include <conveyor_bot.h>
 #include <movements.h>
 #include <process_image.h>
 
@@ -54,7 +55,8 @@ int main(void)
     // Activate ToF module
     //VL53L0X_start();
     // Activate motors module
-    mvt_init();
+    conveyor_bot_init();
+    //mvt_init();
     // Activate piano module (IR and buzzer)
     //piano_init();
 

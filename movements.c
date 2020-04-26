@@ -151,5 +151,5 @@ static THD_FUNCTION(MotorRegulation, arg) {
 
 void mvt_init(void){
 	motors_init();
-	chThdCreateStatic(waMotorRegulation, sizeof(waMotorRegulation), NORMALPRIO+2, MotorRegulation, NULL);
+	chThdCreateStatic(waMotorRegulation, sizeof(waMotorRegulation), NORMALPRIO+1, MotorRegulation, NULL);
 }
