@@ -19,7 +19,7 @@
 
 #include <conveyor_bot.h>
 #include <movements.h>
-#include <process_image.h>
+#include <world_analysis.h>
 
 //----------------------------------------- Functions ------------------------------------------
 
@@ -84,7 +84,7 @@ int main(void)
     	//motor_set_position(20,20,speed,speed);
     	//float val = VL53L0X_get_dist_mm()*0.9;
         //chprintf((BaseSequentialStream *)&SD3, "Distance = %f \r", val);
-    	//chThdSleepMilliseconds(1000);
+    	chThdSleepMilliseconds(1000);
     }
 }
 

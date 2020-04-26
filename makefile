@@ -12,8 +12,8 @@ GLOBAL_PATH = ../lib/e-puck2_main-processor
 CSRC += ./main.c \
 		./movements.c \
 		./conveyor_bot.c \
-		./piano.c \
-		./process_image.c \
+		./world_analysis.c \
+#		./piano.c \
 
 #Header folders to include
 INCDIR += 

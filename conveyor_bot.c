@@ -9,15 +9,18 @@
 
 
 #include <chprintf.h>
+#include <usbcfg.h>
 #include <main.h>
 
 #include <conveyor_bot.h>
 #include <movements.h>
-#include <process_image.h>
+#include <world_analysis.h>
 
-//-------------------------------------------------------defines-------------------------------------------------------
+//-----------------------------------------------------defines-------------------------------------------------------------
 
 //--------------------------------------------------static variables-------------------------------------------------------
+
+//------------------------------------------private functions declarations-------------------------------------------------
 
 //----------------------------------------------------functions------------------------------------------------------------
 
@@ -33,15 +36,16 @@ static THD_FUNCTION(ConveyorBot, arg) {
 
     obj_pos[BLUE_TARGET].angle = 87.6;
     obj_pos[MEDIUM_OBJ].dist = 25;
-
     systime_t time;
 
     while(1){
     	time = chVTGetSystemTime();
 
-    	chprintf((BaseSequentialStream *)&SD3, "Blue angle = %f Medium dist = %f \r", obj_pos[BLUE_TARGET].angle, obj_pos[LARGE_OBJ].dist);
+    	uint16_t mm = get_distance_mm();
 
-        chThdSleepUntilWindowed(time, time + MS2ST(1));
+    	chprintf((BaseSequentialStream *)&SDU1, "Dist = %d mm\r", mm);
+
+        chThdSleepUntilWindowed(time, time + MS2ST(50));
     }
 }
 
@@ -51,6 +55,7 @@ void conveyor_bot_init(void){
 	objects_pos[LARGE_OBJ].dist = 118;
 
 	mvt_init();
+	world_analysis_start();
 
 	chThdCreateStatic(waConveyorBot, sizeof(waConveyorBot), NORMALPRIO, ConveyorBot, objects_pos);
 }
