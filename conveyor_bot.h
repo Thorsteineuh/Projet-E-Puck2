@@ -11,9 +11,9 @@
 /** Struct containing a position in space in regards to the robot */
 typedef struct {
     /** Trigonometric angle between robot orientation and point */
-    float angle;
+    int16_t angle;
     /** Distance between robot center and point */
-    float dist;
+    uint16_t dist;
 } position_t;
 
 typedef enum{
