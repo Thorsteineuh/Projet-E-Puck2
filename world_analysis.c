@@ -10,8 +10,7 @@
 #include <sensors/VL53L0X/VL53L0X.h>
 
 
-#define VAL_THRES 10		//a def
-#define MID_THRES 20
+#define HEIGHT_THRES 20		//a def
 #define MM_THRES 4
 #define ANGLE_CORR 0.9063	// = cos(25)
 
@@ -103,34 +102,40 @@ static THD_FUNCTION(ProcessImage, arg) {
 
 uint16_t image_analysis(uint8_t* canal, uint16_t size){
 
-	uint16_t mean = 0;
-	uint8_t min = 32;
-	uint8_t max = 0;
+	uint8_t min = -1;			//value of the min
+	uint16_t test_i = 2*size;
 
-
-	for(int i = 0; i < size; i++){			//finding the smallest and biggest values
-		if(canal[i] < min) min = canal[i];
-		if(canal[i] > max) max = canal[i];
+	for(uint16_t i = 0; i < size; i++){			//finding the smallest value
+		if(canal[i] < min) {
+			test_i = i;			//index of the min
+			min = canal[i];
+		}
 	}
 
-	if (max-min < VAL_THRES) return 0;		//s'il n'y a pas de creux ignorer - thres a definir
-
-	mean = (min + max)/4;
-
-	uint16_t step = 0;
 	uint16_t width = 0;
+	uint8_t test_val = min + HEIGHT_THRES;
+	min = test_i;			// /!\ index of the min
+	test_i = 2*size;
 
+	for (uint16_t i = min; i < size; i++) {
+		if (canal[i]>test_val) {
+			test_val = canal[i] + HEIGHT_THRES;
+			test_i = i;			//index of the right edge of object
+		}
+	}
 
-	if (canal[size/2]>mean) return 0;		//si le creux n'est pas a peu pres au milieu, on skip
-	while ((step<size/2)&&(canal[size/2+step]<mean)) step++;
-	width += step;
-	step = 0;
-	while ((step<size/2-1)&&(canal[size/2-step-1]<mean)) step++;
-	width += step;
+	width = test_i;
+	test_val = canal[min] + HEIGHT_THRES;
 
-	//si le milieu est bien centre, on peut continuer
-	if (abs(width/2-step) < MID_THRES) return width;
+	for (uint16_t i = min - 1; i > 0; i--) {
+		if (canal[i]>test_val) {
+			test_val = canal[i] + HEIGHT_THRES;
+			test_i = i;			//index of the left edge of object
+		}
+	}
 
+	width -= test_i;
+	if (width > size) width = 0;
 	//uint8_t width_mm = width * dist_mm * 1 * 2 / IMAGE_BUFFER_SIZE;		//ici 1 = tan(45)
 	//chprintf((BaseSequentialStream *)&SDU1, "distance = %f \n", distance_cm);
 
