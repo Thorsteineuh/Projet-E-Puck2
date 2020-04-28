@@ -34,9 +34,10 @@ void update_coor(position_t * tableau, uint16_t dist, int16_t angle) {
 		if (angle == 0) {
 			uint16_t D = tableau[i].dist;
 			float32_t theta = tableau[i].angle * DEG2RAD;
-			D = sqrt(dist*dist + D*D - 2*dist*D*arm_cos_f32(theta));	//D prime
-			tableau[i].dist = D;
-			tableau[i].angle = (theta + asin(dist*arm_sin_f32(theta)/D)) / DEG2RAD;
+			uint16_t Dp = sqrt(dist*dist + D*D - 2*dist*D*arm_cos_f32(theta));
+			tableau[i].dist = Dp;
+			if (theta * dist >= 0) tableau[i].angle += acos((D*D + Dp*Dp - dist*dist)/(2*D*Dp)) / DEG2RAD;
+			else tableau[i].angle -= acos((D*D + Dp*Dp - dist*dist)/(2*D*Dp)) / DEG2RAD;
 		} else if (dist == 0) tableau[i].angle += angle;
 	}
 }
