@@ -66,7 +66,8 @@ static THD_FUNCTION(ConveyorBot, arg) {
     	}
     	mm/=10;
     	chprintf((BaseSequentialStream *)&SDU1, "Dist = %d mm\r", mm);
-*/
+    	*/
+
         chThdSleepUntilWindowed(time, time + MS2ST(50));
     }
 }
