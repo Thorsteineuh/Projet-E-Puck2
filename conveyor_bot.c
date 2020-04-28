@@ -34,17 +34,22 @@ static THD_FUNCTION(ConveyorBot, arg) {
     chRegSetThreadName(__FUNCTION__);
     position_t *obj_pos = (position_t *)arg;
 
-    obj_pos[BLUE_TARGET].angle = 87.6;
+    obj_pos[BLUE_TGT].angle = 87.6;
     obj_pos[MEDIUM_OBJ].dist = 25;
     systime_t time;
 
     while(1){
     	time = chVTGetSystemTime();
 
-    	uint16_t mm = get_distance_mm();
+    	/*uint16_t mm = 0;
 
+    	for(int i = 0; i < 10; i++){
+    		mm += get_distance_mm();
+    		chThdSleepMilliseconds(100);
+    	}
+    	mm/=10;
     	chprintf((BaseSequentialStream *)&SDU1, "Dist = %d mm\r", mm);
-
+*/
         chThdSleepUntilWindowed(time, time + MS2ST(50));
     }
 }

@@ -9,11 +9,26 @@
 #include <world_analysis.h>
 #include <sensors/VL53L0X/VL53L0X.h>
 
+//-----------------------------------------------------defines-------------------------------------------------------------
 
 #define VAL_THRES 10		//a def
 #define MID_THRES 20
 #define MM_THRES 4
 #define ANGLE_CORR 0.9063	// = cos(25)
+
+//------------------------------------------------------macros-------------------------------------------------------------
+
+// Functions determined via experimentation
+#define TOF_TRUEDIST_SMALL(x) 1e-5*(x)*(x)*(x)-0.0061*(x)*(x)+1.5318*(x)-4.673
+#define TOF_TRUEDIST_MEDIUM(x) 9e-6*(x)*(x)*(x)-0.0054*(x)*(x)+1.5506*(x)-6.8456
+#define TOF_TRUEDIST_LARGE(x) 5e-6*(x)*(x)*(x)-0.0032*(x)*(x)+1.2356*(x)+11.739
+
+// Functions determined via experimentation
+#define CAMERA_TRUEDIST_SMALL(x) 21900/(x)
+#define CAMERA_TRUEDIST_MEDIUM(x) 28800/(x)
+#define CAMERA_TRUEDIST_LARGE(x) 35700/(x)
+
+//--------------------------------------------------static variables-------------------------------------------------------
 
 static float distance_cm = 0;
 
@@ -21,14 +36,115 @@ static float distance_cm = 0;
 //static BSEMAPHORE_DECL(image_request_sem, TRUE);
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
 
+//------------------------------------------private functions declarations-------------------------------------------------
+
+/**
+* @brief 	Corrects the distance returned by the ToF sensor
+
+* @param tof_mm		Raw distance given by the time of flight sensor in [mm]
+* @param object		The object supposed to be in front of the robot
+*
+* @return	calculated distance in [mm]
+*/
+uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object);
+
+/**
+* @brief 	Converts the width seen by the camera into a distance
+*
+* @param object_width		Width seen by the camera in [pixels]
+* @param object				The object supposed to be in front of the robot
+*
+* @return	calculated distance in [mm]
+*/
+uint16_t get_camera_trueDist_mm(uint16_t object_width, gameObject_t object);
+
+/**
+* @brief 	Compares distances given by the camera and the ToF
+* 			to discriminate the object facing the robot
+*
+* @param tof_mm			Raw distance given by the time of flight sensor in [mm]
+* @param cam_width		Width seen by the camera in [pixels]
+* @param dist_return	Address to return the final distance in [mm]
+*
+* @return	Object found in front of the robot
+*/
+gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width, uint16_t *dist_return);
+
+//----------------------------------------------------functions------------------------------------------------------------
+
+uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object){
+
+	if(object <= BLUE_TGT) return 0;
+
+	if(object == SMALL_OBJ){
+		float dist = TOF_TRUEDIST_SMALL(tof_mm);
+		return (uint16_t) dist;
+	} else if(object == MEDIUM_OBJ){
+		float dist = TOF_TRUEDIST_MEDIUM(tof_mm);
+		return (uint16_t) dist;
+	} else {
+		float dist = TOF_TRUEDIST_LARGE(tof_mm);
+		return (uint16_t) dist;
+	}
+}
+
+uint16_t get_camera_trueDist_mm(uint16_t object_width, gameObject_t object){
+
+	if(object <= BLUE_TGT) return 0;
+
+	if(object == SMALL_OBJ){
+		float dist = CAMERA_TRUEDIST_SMALL(object_width);
+		return (uint16_t) dist;
+	} else if(object == MEDIUM_OBJ){
+		float dist = CAMERA_TRUEDIST_MEDIUM(object_width);
+		return (uint16_t) dist;
+	} else {
+		float dist = CAMERA_TRUEDIST_LARGE(object_width);
+		return (uint16_t) dist;
+	}
+}
+
+gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width, uint16_t *dist_return){
+
+	uint16_t tof_corr;
+	uint16_t cam_corr;
+	gameObject_t obj_return = SMALL_OBJ;
+
+	//Hypothesis of the small object
+	tof_corr = get_ToF_trueDist_mm(tof_mm, SMALL_OBJ);
+	cam_corr = get_camera_trueDist_mm(cam_width, SMALL_OBJ);
+	uint16_t error_small = abs(tof_corr - cam_corr);
+	*dist_return = cam_corr;
+
+	//Hypothesis of the medium object
+	tof_corr = get_ToF_trueDist_mm(tof_mm, MEDIUM_OBJ);
+	cam_corr = get_camera_trueDist_mm(cam_width, MEDIUM_OBJ);
+	uint16_t error_medium = abs(tof_corr - cam_corr);
+	if(error_medium < error_small){
+		*dist_return = cam_corr;
+		obj_return = MEDIUM_OBJ;
+	}
+
+	//Hypothesis of the large object
+	tof_corr = get_ToF_trueDist_mm(tof_mm, LARGE_OBJ);
+	cam_corr = get_camera_trueDist_mm(cam_width, LARGE_OBJ);
+	uint16_t error_large = abs(tof_corr - cam_corr);
+	if(error_large < error_medium && error_large < error_small){
+		*dist_return = cam_corr;
+		obj_return = LARGE_OBJ;
+	}
+
+	return obj_return;
+}
+
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
 
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
 
-	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 10 + 11 (minimum 2 lines because reasons)
-	po8030_advanced_config(FORMAT_RGB565, 0, 10, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
+	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 240 + 241 (minimum 2 lines because reasons)
+	po8030_advanced_config(FORMAT_RGB565, 0, 240, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
 	dcmi_enable_double_buffering();
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
 	dcmi_prepare();
@@ -82,13 +198,13 @@ static THD_FUNCTION(ProcessImage, arg) {
 		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE);
 
 		//chprintf((BaseSequentialStream *)&SDU1, "largeur red = %d ", r_width);
-		//chprintf((BaseSequentialStream *)&SDU1, "largeur green = %d ", g_width);
+		chprintf((BaseSequentialStream *)&SDU1, "largeur green = %d \r", g_width);
 		//chprintf((BaseSequentialStream *)&SDU1, "largeur blue = %d \r", b_width);
 
-		if (g_width == 0 && r_width>0 && b_width>0) chprintf((BaseSequentialStream *)&SDU1, "c'est une cible verte \r");
+		/*if (g_width == 0 && r_width>0 && b_width>0) chprintf((BaseSequentialStream *)&SDU1, "c'est une cible verte \r");
 		if (r_width == 0 && g_width>0 && b_width>0) chprintf((BaseSequentialStream *)&SDU1, "c'est une cible rouge \r");
 		if (b_width == 0 && r_width>0 && g_width>0) chprintf((BaseSequentialStream *)&SDU1, "c'est une cible bleue \r");
-
+*/
 		if (g_width>0 && r_width>0 && b_width>0) {
 			uint16_t dist_mm = VL53L0X_get_dist_mm() * ANGLE_CORR;
 			uint8_t width_mm = g_width * dist_mm * 0.414 * 2 / IMAGE_BUFFER_SIZE;		//ici 0.414 = tan(22.5)
@@ -119,14 +235,18 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 
 	uint16_t step = 0;
 	uint16_t width = 0;
-
+	static int greeny = 0;
+	greeny++;
+	if(greeny >=3)greeny = 0;
 
 	if (canal[size/2]>mean) return 0;		//si le creux n'est pas a peu pres au milieu, on skip
 	while ((step<size/2)&&(canal[size/2+step]<mean)) step++;
 	width += step;
+	if(!greeny) chprintf((BaseSequentialStream *)&SDU1, "xMax = %d ", size/2+step);
 	step = 0;
 	while ((step<size/2-1)&&(canal[size/2-step-1]<mean)) step++;
 	width += step;
+	if(!greeny) chprintf((BaseSequentialStream *)&SDU1, "xMin = %d ", size/2-step);
 
 	//si le milieu est bien centre, on peut continuer
 	if (abs(width/2-step) < MID_THRES) return width;

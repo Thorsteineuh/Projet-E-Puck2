@@ -17,9 +17,9 @@ typedef struct {
 } position_t;
 
 typedef enum{
-	RED_TARGET,			//Target where the small obj must be deposited
-	GREEN_TARGET,		//Target where the medium obj must be deposited
-	BLUE_TARGET,		//Target where the large obj must be deposited
+	RED_TGT,			//Target where the small obj must be deposited
+	GREEN_TGT,			//Target where the medium obj must be deposited
+	BLUE_TGT,			//Target where the large obj must be deposited
 	SMALL_OBJ,			//Black tube 3 cm in diameter
 	MEDIUM_OBJ,			//Black tube 4 cm in diameter
 	LARGE_OBJ,			//Black tube 5 cm in diameter
