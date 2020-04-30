@@ -166,32 +166,76 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 	mean = (min + max)/4;				//magic num
 
 	uint16_t start = -1;
+	uint16_t moyen;
+	uint16_t temp1;
+	uint16_t temp2 = canal[size/2];
+	uint16_t temp3 = canal[size/2+1];
+	uint16_t temp4 = canal[size/2+2];
 
-	for(uint16_t i = 0; i < size/2; i++){
-		if (canal[size/2+i]<mean) {
-			start = size/2+i;
-			break;
-		}
-		if (canal[size/2-i]<mean) {
-			start = size/2-i;
+
+	for(uint16_t i = size/2 + 3; i < size; i++){
+		temp1 = temp2;
+		temp2 = temp3;
+		temp3 = temp4;
+		temp4 = canal[i];
+		moyen = (temp1 + temp2 + temp3 + temp4)/4;
+
+		if (moyen<mean) {
+			start = i - 3;
 			break;
 		}
 	}
 
-	uint16_t step = 0;
+	temp2 = canal[size/2-1];
+	temp3 = canal[size/2-2];
+	temp4 = canal[size/2-3];
+
+	for(uint16_t i = size/2 - 4; i > 0; i--){
+		temp1 = temp2;
+		temp2 = temp3;
+		temp3 = temp4;
+		temp4 = canal[i];
+		moyen = (temp1 + temp2 + temp3 + temp4)/4;
+
+		if ((moyen<mean)&&(start-size/2>size/2-i)) {
+			start = i;
+			break;
+		}
+	}
+
+	uint16_t step = 3;
 	uint16_t width = 0;
+	temp2 = canal[start];
+	temp3 = canal[start+1];
+	temp4 = canal[start+2];
 
 	while (start+step<size) {
-		if (canal[start+step]<mean) step++;
+		temp1 = temp2;
+		temp2 = temp3;
+		temp3 = temp4;
+		temp4 = canal[start+step];
+		moyen = (temp1 + temp2 + temp3 + temp4)/4;
+
+		if (moyen<mean) step++;
 		else break;
 	}
-	width += step;
-	step = 0;
+	if (start+step==size) return 0;
+	width += step - 3;
+	step = 4;
+	temp2 = canal[start-1];
+	temp3 = canal[start-2];
+	temp4 = canal[start-3];
 
 	while (start-step>0) {
-		if (canal[start-step-1]<mean) step++;
+		temp1 = temp2;
+		temp2 = temp3;
+		temp3 = temp4;
+		temp4 = canal[start-step];
+		moyen = (temp1 + temp2 + temp3 + temp4)/4;
+		if (moyen<mean) step++;
 		else break;
 	}
+	if (start-step==0) return 0;
 	width += step;
 
 	return width;
