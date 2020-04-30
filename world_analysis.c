@@ -11,7 +11,7 @@
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
-#define HEIGHT_THRES 20		//Minimum rising or falling edge
+#define VAL_THRES 20		//Minimum rising or falling edge
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -151,44 +151,50 @@ void wa_camera_enable(bool enable){
 
 uint16_t image_analysis(uint8_t* canal, uint16_t size){
 
-	uint8_t min = -1;			//value of the min
-	uint16_t test_i = 2*size;
+	uint8_t mean = 0;
+	uint8_t min = 32;
+	uint8_t max = 0;
 
-	for(uint16_t i = 0; i < size; i++){			//finding the smallest value
-		if(canal[i] < min) {
-			test_i = i;			//index of the min
-			min = canal[i];
+
+	for(uint16_t i = 0; i < size; i++){			//finding the smallest and biggest values
+		if(canal[i] < min) min = canal[i];
+		if(canal[i] > max) max = canal[i];
+	}
+
+	if (max-min < VAL_THRES) return 0;		//s'il n'y a pas de creux ignorer - thres a definir
+
+	mean = (min + max)/4;				//magic num
+
+	uint16_t start = -1;
+
+	for(uint16_t i = 0; i < size/2; i++){
+		if (canal[size/2+i]<mean) {
+			start = size/2+i;
+			break;
+		}
+		if (canal[size/2-i]<mean) {
+			start = size/2-i;
+			break;
 		}
 	}
 
+	uint16_t step = 0;
 	uint16_t width = 0;
-	uint8_t test_val = min + HEIGHT_THRES;
-	min = test_i;			// /!\ index of the min
-	test_i = 2*size;
 
-	for (uint16_t i = min; i < size; i++) {
-		if (canal[i]>test_val) {
-			test_val = canal[i] + HEIGHT_THRES;
-			test_i = i;			//index of the right edge of object
-		}
+	while (start+step<size) {
+		if (canal[start+step]<mean) step++;
+		else break;
 	}
+	width += step;
+	step = 0;
 
-	width = test_i;
-	test_val = canal[min] + HEIGHT_THRES;
-
-	for (uint16_t i = min - 1; i > 0; i--) {
-		if (canal[i]>test_val) {
-			test_val = canal[i] + HEIGHT_THRES;
-			test_i = i;			//index of the left edge of object
-		}
+	while (start-step>0) {
+		if (canal[start-step-1]<mean) step++;
+		else break;
 	}
+	width += step;
 
-	width -= test_i;
-	if (width > size) width = 0;
-	//uint8_t width_mm = width * dist_mm * 1 * 2 / IMAGE_BUFFER_SIZE;		//ici 1 = tan(45)
-	//chprintf((BaseSequentialStream *)&SDU1, "distance = %f \n", distance_cm);
-
-	return 0;
+	return width;
 }
 
 static THD_WORKING_AREA(waCaptureImage, 256);
