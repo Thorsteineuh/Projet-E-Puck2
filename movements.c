@@ -9,7 +9,7 @@
 
 #define NSTEP_ONE_TURN      	1000 // number of step for 1 turn of the motor
 #define MOTOR_MIN_SPEED_STEP   	230  // [step/s]
-#define MOTOR_MIN_SPEED_CM   	2.99 // [cm/s]
+#define MOTOR_MIN_SPEED_CM   	2.99f // [cm/s]
 
 #define WHEEL_PERIMETER     	13 // [cm]
 #define WHEEL_DISTANCE     	 	5.35f    //cm
@@ -23,6 +23,10 @@
 
 static bool ongoing_mvt = false;
 
+//----------------------------------------------------semaphores-----------------------------------------------------------
+
+static BSEMAPHORE_DECL(end_of_movement_sem, TRUE);
+
 //----------------------------------------------------functions------------------------------------------------------------
 
 void mvt_stop(void)
@@ -31,6 +35,7 @@ void mvt_stop(void)
 	left_motor_set_speed(0);
 
 	ongoing_mvt = false;
+	chBSemSignal(&end_of_movement_sem);
 }
 
 void mvt_set_speed(float speed_r, float speed_l)
@@ -111,6 +116,9 @@ bool mvt_turn(float radius, float angle, float speed)
 	else return mvt_set_position(-distInt, -distExt, speedInt, speedExt);
 }
 
+void mvt_wait_end_of_movement(void){
+	chBSemWait(&end_of_movement_sem);
+}
 
 /**
 * @thread   Thread for reading motor positions and doing various motor-related actions
@@ -134,18 +142,21 @@ static THD_FUNCTION(MotorRegulation, arg) {
     		bool left_done = false;
     		// The stopping condition is a range of multiple values because
     		// the sampling is done at low frequency (it may miss some steps)
-			if(rPos < 2 && rPos > -2){
+			if(rPos == 0){
 				right_motor_set_speed(0);
 				right_done = true;
 			}
-			if(lPos < 2 && lPos > -2){
+			if(lPos == 0){
 				left_motor_set_speed(0);
 				left_done = true;
 			}
-			if(right_done && left_done) ongoing_mvt = false;
+			if(right_done && left_done){
+				ongoing_mvt = false;
+				chBSemSignal(&end_of_movement_sem);
+			}
     	}
     	//The positions check is made every ms. (The motors max speed is 1.1 step/ms)
-        chThdSleepUntilWindowed(time, time + MS2ST(1));
+        chThdSleepUntilWindowed(time, time + US2ST(500));
     }
 }
 

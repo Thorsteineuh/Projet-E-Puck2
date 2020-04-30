@@ -26,6 +26,17 @@ typedef enum{
 	NB_GAMEOBJECT		//Number of objects in the playing area
 } gameObject_t;
 
+typedef enum{
+	ACQUISITION,		//The robot looks at his surroundings to locate each gameObject
+	TAKE_OBJECT_1,		//The robot moves to the object closest to the targets and grabs it
+	MOVE_TO_TARGET_1,	//The robot goes to deliver the object to its objective
+	TAKE_OBJECT_2,		//Repeats with second object
+	MOVE_TO_TARGET_2,	//...
+	TAKE_OBJECT_3,		//Repeats with third object
+	MOVE_TO_TARGET_3,	//...
+	END_OF_TASK			//Nothing left to do. A dance maybe ?
+} gameState_t;
+
 void conveyor_bot_init(void);
 
 #endif /* CONVEYOR_BOT_H_ */

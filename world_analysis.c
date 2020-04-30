@@ -28,14 +28,15 @@
 //--------------------------------------------------static variables-------------------------------------------------------
 
 static bool camera_enabled = true;
+static bool ongoing_analysis = false;
 
 //----------------------------------------------------semaphores-----------------------------------------------------------
 
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
+static BSEMAPHORE_DECL(analyze_request_sem, TRUE);
 static BSEMAPHORE_DECL(analysis_done_sem, TRUE);
 
 //------------------------------------------private functions declarations-------------------------------------------------
-
 
 /**
 * @brief 	Corrects the distance returned by the ToF sensor
@@ -47,7 +48,6 @@ static BSEMAPHORE_DECL(analysis_done_sem, TRUE);
 */
 uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object);
 
-
 /**
 * @brief 	Converts the width seen by the camera into a distance
 *
@@ -57,7 +57,6 @@ uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object);
 * @return	calculated distance in [mm]
 */
 uint16_t get_camera_trueDist_mm(uint16_t object_width, gameObject_t object);
-
 
 /**
 * @brief 	Compares distances given by the camera and the ToF
@@ -72,7 +71,6 @@ uint16_t get_camera_trueDist_mm(uint16_t object_width, gameObject_t object);
 gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width, uint16_t *dist_return);
 
 //----------------------------------------------------functions------------------------------------------------------------
-
 
 uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object){
 
@@ -90,7 +88,6 @@ uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object){
 	}
 }
 
-
 uint16_t get_camera_trueDist_mm(uint16_t object_width, gameObject_t object){
 
 	if(object <= BLUE_TGT) return 0;
@@ -106,7 +103,6 @@ uint16_t get_camera_trueDist_mm(uint16_t object_width, gameObject_t object){
 		return (uint16_t) dist;
 	}
 }
-
 
 gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width, uint16_t *dist_return){
 
@@ -141,8 +137,12 @@ gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width,
 	return obj_return;
 }
 
+void wa_analyze_image(void){
+	chBSemSignal(&analyze_request_sem);
+}
+
 void wa_wait_analysis_done(void){
-	chBSemWait(&analysis_done_sem);
+	if(ongoing_analysis) chBSemWait(&analysis_done_sem);
 }
 
 void wa_camera_enable(bool enable){
@@ -229,8 +229,12 @@ static THD_FUNCTION(ProcessImage, arg) {
 	uint8_t *img_buff_ptr;
 
     while(1){
+    	//waits until a request is made
+    	chBSemWait(&analyze_request_sem);
+    	ongoing_analysis = true;
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
+
 		//gets the pointer to the array filled with the last image in RGB565
 		img_buff_ptr = dcmi_get_last_image_ptr();
 
@@ -245,9 +249,13 @@ static THD_FUNCTION(ProcessImage, arg) {
 		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE);
 		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE);
 
-		SendUint8ToComputer(green, IMAGE_BUFFER_SIZE);
-		chprintf((BaseSequentialStream *)&SDU1, "Width = %d mm \r", g_width);
+		(void)r_width;
+		(void)b_width;
 
+		SendUint8ToComputer(green, IMAGE_BUFFER_SIZE);
+		//chprintf((BaseSequentialStream *)&SDU1, "Width = %d mm \r", g_width);
+
+		ongoing_analysis = false;
 		chBSemSignal(&analysis_done_sem);
     }
 }

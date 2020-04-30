@@ -63,6 +63,11 @@ bool mvt_rotate(float angle, float speed);
 bool mvt_turn(float radius, float angle, float speed);
 
 /**
+* @brief   Waits until there is no ongoing movement
+*/
+void mvt_wait_end_of_movement(void);
+
+/**
 * @brief   Initialization of the robot movements module
 */
 void mvt_init(void);

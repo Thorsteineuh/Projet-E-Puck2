@@ -70,7 +70,7 @@ int main(void)
     /* Infinite loop. */
 	int state = 1;
     while(1){
-    	if(get_selector() == 0){
+    	/*if(get_selector() == 0){
 			switch(state){
 			case -1:chThdSleepMilliseconds(1000);state++;break;
 			case 0: if(mvt_move(10,10))state++;break;
@@ -80,7 +80,7 @@ int main(void)
     	} else {
     		state = -1;
     		mvt_stop();
-    	}
+    	}*/
     	//motor_set_position(20,20,speed,speed);
     	//float val = VL53L0X_get_dist_mm()*0.9;
         //chprintf((BaseSequentialStream *)&SD3, "Distance = %f \r", val);
