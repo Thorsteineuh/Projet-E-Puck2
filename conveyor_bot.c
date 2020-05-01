@@ -22,11 +22,11 @@
 
 #define COMPLETE_TURN			360
 #define MAX_ANGLE				180
-#define DEG2RAD 				M_PI/180
 
 #define ACQUISITION_MVT_SPEED	5	//Speed at which to rotate
 #define ACQUISITION_ANGLE_STEP	2 	//Angle in degrees to rotate between analysis
 
+#define DEG2RAD M_PI/161.61
 //--------------------------------------------------static variables-------------------------------------------------------
 
 //------------------------------------------private functions declarations-------------------------------------------------
@@ -78,7 +78,7 @@ static THD_FUNCTION(ConveyorBot, arg) {
     		update_coor(obj_pos,0,ACQUISITION_ANGLE_STEP);
 
     		acquisition_angle++;
-    		//The robot makes a full 360° rotation before changing state
+    		//The robot makes a full 360ï¿½ rotation before changing state
     		if(acquisition_angle >= COMPLETE_TURN/ACQUISITION_ANGLE_STEP/15) state++;
     		break;
     	case TAKE_OBJECT_1 :
