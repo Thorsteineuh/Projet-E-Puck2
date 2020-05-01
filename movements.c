@@ -7,7 +7,7 @@
 
 //-------------------------------------------------------defines-------------------------------------------------------
 
-#define NSTEP_ONE_TURN      	1000 // number of step for 1 turn of the motor
+#define NSTEP_ONE_TURN      	1000 // number of steps for 1 turn of the motor
 #define MOTOR_MIN_SPEED_STEP   	230  // [step/s]
 #define MOTOR_MIN_SPEED_CM   	2.99f // [cm/s]
 
@@ -117,7 +117,7 @@ bool mvt_turn(float radius, float angle, float speed)
 }
 
 void mvt_wait_end_of_movement(void){
-	chBSemWait(&end_of_movement_sem);
+	if(ongoing_mvt) chBSemWait(&end_of_movement_sem);
 }
 
 /**

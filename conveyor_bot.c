@@ -20,13 +20,14 @@
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
-#define COMPLETE_TURN			360
-#define MAX_ANGLE				180
+#define CUSTOM_ANGLE	1.114f	//Angle to make 4 motor steps
+#define COMPLETE_TURN	324	  	//Number of custom angles to make a full turn
+#define MAX_ANGLE		162	  	//Half a turn in custom angles
 
-#define ACQUISITION_MVT_SPEED	5	//Speed at which to rotate
-#define ACQUISITION_ANGLE_STEP	2 	//Angle in degrees to rotate between analysis
+#define ACQUISITION_MVT_SPEED	3	//Speed at which to rotate
+#define ACQUISITION_ANGLE_STEP	10*CUSTOM_ANGLE 	//Angle in degrees to rotate between analysis
 
-#define DEG2RAD M_PI/161.61
+#define DEG2RAD M_PI/161.58	//Custom angles to radians
 //--------------------------------------------------static variables-------------------------------------------------------
 
 //------------------------------------------private functions declarations-------------------------------------------------
@@ -73,19 +74,22 @@ static THD_FUNCTION(ConveyorBot, arg) {
     		wa_analyze_image();
 
     		//The robot rotates while the analysis is done
-    		mvt_rotate(ACQUISITION_ANGLE_STEP*15, 15);
+    		mvt_rotate(ACQUISITION_ANGLE_STEP, ACQUISITION_MVT_SPEED);
     		mvt_wait_end_of_movement();
     		update_coor(obj_pos,0,ACQUISITION_ANGLE_STEP);
 
+    		chThdSleepMilliseconds(60);
     		acquisition_angle++;
     		//The robot makes a full 360� rotation before changing state
-    		if(acquisition_angle >= COMPLETE_TURN/ACQUISITION_ANGLE_STEP/15) state++;
+    		if(acquisition_angle >= COMPLETE_TURN/ACQUISITION_ANGLE_STEP) state++;
     		break;
     	case TAKE_OBJECT_1 :
     	case TAKE_OBJECT_2 :
     	case TAKE_OBJECT_3 :
-    		palTogglePad(GPIOD, GPIOD_LED_FRONT);
-    		chThdSleepMilliseconds(500);
+    		wa_wait_analysis_done();
+    		wa_analyze_image();
+    		//palTogglePad(GPIOD, GPIOD_LED_FRONT);
+    		//chThdSleepMilliseconds(500);
     		break;
     	case MOVE_TO_TARGET_1 :
     	case MOVE_TO_TARGET_2 :

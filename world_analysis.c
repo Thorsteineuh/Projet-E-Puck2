@@ -11,7 +11,7 @@
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
-
+#define VAL_THRES 20
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -151,7 +151,7 @@ void wa_camera_enable(bool enable){
 
 uint16_t image_analysis(uint8_t* canal, uint16_t size){
 
-	uint8_t threshold = 0;
+	uint8_t mean = 0;
 	uint8_t min = 32;
 	uint8_t max = 0;
 
@@ -161,24 +161,43 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 		if(canal[i] > max) max = canal[i];
 	}
 
-	threshold = (min + max)/4;				//magic num
+	if (max-min < VAL_THRES) return 0;		//s'il n'y a pas de creux ignorer - thres a definir
+
+	mean = (min + max)/4;				//magic num
 
 	uint16_t start = -1;
-	uint16_t temp[4] = {canal[size/2]/4, canal[size/2+1]/4, canal[size/2+2]/4, 0};
+	uint16_t moyen;
+	uint16_t temp1;
+	uint16_t temp2 = canal[size/2];
+	uint16_t temp3 = canal[size/2+1];
+	uint16_t temp4 = canal[size/2+2];
+
 
 	for(uint16_t i = size/2 + 3; i < size; i++){
-		if (get_mean(temp, canal[i]/4, i)<threshold) {
+		temp1 = temp2;
+		temp2 = temp3;
+		temp3 = temp4;
+		temp4 = canal[i];
+		moyen = (temp1 + temp2 + temp3 + temp4)/4;
+
+		if (moyen<mean) {
 			start = i - 3;
 			break;
 		}
 	}
 
-	temp[1] = canal[size/2-1];
-	temp[2] = canal[size/2-2];
-	temp[3] = canal[size/2-3];
+	temp2 = canal[size/2-1];
+	temp3 = canal[size/2-2];
+	temp4 = canal[size/2-3];
 
 	for(uint16_t i = size/2 - 4; i > 0; i--){
-		if ((get_mean(temp, canal[i]/4, i)<threshold)&&(start-size/2>size/2-i)) {
+		temp1 = temp2;
+		temp2 = temp3;
+		temp3 = temp4;
+		temp4 = canal[i];
+		moyen = (temp1 + temp2 + temp3 + temp4)/4;
+
+		if ((moyen<mean)&&(start-size/2>size/2-i)) {
 			start = i;
 			break;
 		}
@@ -186,29 +205,38 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 
 	uint16_t step = 3;
 	uint16_t width = 0;
-
-	temp[0] = canal[start];
-	temp[1] = canal[start+1];
-	temp[2] = canal[start+2];
+	temp2 = canal[start];
+	temp3 = canal[start+1];
+	temp4 = canal[start+2];
 
 	while (start+step<size) {
-		if (get_mean(temp, canal[start+step]/4, step)<threshold) step++;
+		temp1 = temp2;
+		temp2 = temp3;
+		temp3 = temp4;
+		temp4 = canal[start+step];
+		moyen = (temp1 + temp2 + temp3 + temp4)/4;
+
+		if (moyen<mean) step++;
 		else break;
 	}
 	if (start+step==size) return 0;
 	width += step - 3;
-
 	step = 4;
-	temp[1] = canal[start-1];
-	temp[2] = canal[start-2];
-	temp[3] = canal[start-3];
+	temp2 = canal[start-1];
+	temp3 = canal[start-2];
+	temp4 = canal[start-3];
 
 	while (start-step>0) {
-		if (get_mean(temp, canal[start-step]/4, step)<threshold) step++;
+		temp1 = temp2;
+		temp2 = temp3;
+		temp3 = temp4;
+		temp4 = canal[start-step];
+		moyen = (temp1 + temp2 + temp3 + temp4)/4;
+		if (moyen<mean) step++;
 		else break;
 	}
 	if (start-step==0) return 0;
-	width += step - 4;
+	width += step;
 
 	return width;
 }
@@ -278,9 +306,8 @@ static THD_FUNCTION(ProcessImage, arg) {
 
 		(void)r_width;
 		(void)b_width;
-
-		SendUint8ToComputer(green, IMAGE_BUFFER_SIZE);
-		//chprintf((BaseSequentialStream *)&SDU1, "Width = %d mm \r", g_width);
+		//chprintf((BaseSequentialStream *)&SD3, "Width = %d mm \r", g_width);
+		SendUint8ToComputer(green,IMAGE_BUFFER_SIZE);
 
 		ongoing_analysis = false;
 		chBSemSignal(&analysis_done_sem);
