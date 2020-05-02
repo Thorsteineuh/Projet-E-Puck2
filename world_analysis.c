@@ -307,7 +307,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 		(void)r_width;
 		(void)b_width;
 		//chprintf((BaseSequentialStream *)&SD3, "Width = %d mm \r", g_width);
-		SendUint8ToComputer(green,IMAGE_BUFFER_SIZE);
+		//SendUint8ToComputer(green,IMAGE_BUFFER_SIZE);
 
 		ongoing_analysis = false;
 		chBSemSignal(&analysis_done_sem);

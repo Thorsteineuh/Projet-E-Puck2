@@ -17,16 +17,19 @@ void mvt_stop(void);
 void mvt_set_speed(float speed_r, float speed_l);
 
 /**
+* @brief   Sets the rotation origin to zero
+*/
+void mvt_calibrate(void);
+
+/**
 * @brief 	Rotates the motors for the desired distance at the desired speed
-* 			The parameters are in [cm] and [cm/s]
+* 			The parameters are in steps and [cm/s]
 * 			Positions sign give the direction. Speeds are treated as positive
 *
-* @param position_r, position_l		Distance in [cm] the right/left motor has to rotate
-*
-* @return	True if the movements are started,
-* 			false if the motors have previous instructions ongoing.
+* @param position_r, position_l		Number of steps the right/left motor has to rotate
+* @param speed_r, speed_l			Speeds of the motors in [cm/s]
 */
-bool mvt_set_position(float position_r, float position_l, float speed_r, float speed_l);
+void mvt_set_position(int32_t position_r, int32_t position_l, float speed_r, float speed_l);
 
 /**
 * @brief 	Moves the robot in a straight line
@@ -48,7 +51,12 @@ bool mvt_move(float dist, float speed);
 * @return	True if the movements are started,
 * 			false if the motors have previous instructions ongoing.
 */
-bool mvt_rotate(float angle, float speed);
+bool mvt_rotate(int16_t angle, float speed);
+
+/**
+* @brief   Returns the angle the robot makes with its calibrated position
+*/
+int16_t mvt_get_angle(void);
 
 /**
 * @brief   Moves the robot along an arc

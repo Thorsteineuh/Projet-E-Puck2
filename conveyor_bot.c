@@ -65,6 +65,8 @@ static THD_FUNCTION(ConveyorBot, arg) {
     gameState_t state = ACQUISITION;
     uint16_t acquisition_angle = 0;
 
+    mvt_calibrate();
+
     while(1){
     	time = chVTGetSystemTime();
 
@@ -74,14 +76,15 @@ static THD_FUNCTION(ConveyorBot, arg) {
     		wa_analyze_image();
 
     		//The robot rotates while the analysis is done
-    		mvt_rotate(ACQUISITION_ANGLE_STEP, ACQUISITION_MVT_SPEED);
-    		mvt_wait_end_of_movement();
+    		mvt_rotate(360, 3);
+    		int16_t truc = mvt_get_angle();
+    		chprintf((BaseSequentialStream *)&SD3, " Angle = %d \r",truc);
     		update_coor(obj_pos,0,ACQUISITION_ANGLE_STEP);
 
-    		chThdSleepMilliseconds(60);
+    		//chThdSleepMilliseconds(1000);
     		acquisition_angle++;
     		//The robot makes a full 360� rotation before changing state
-    		if(acquisition_angle >= COMPLETE_TURN/ACQUISITION_ANGLE_STEP) state++;
+    		//if(acquisition_angle >= COMPLETE_TURN/ACQUISITION_ANGLE_STEP) state++;
     		break;
     	case TAKE_OBJECT_1 :
     	case TAKE_OBJECT_2 :
