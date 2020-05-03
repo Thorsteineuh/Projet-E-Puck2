@@ -28,7 +28,9 @@
 //--------------------------------------------------static variables-------------------------------------------------------
 
 static bool camera_enabled = true;
-static bool ongoing_analysis = false;
+static bool found_object = false;
+static int16_t center_offset = 0;
+//static bool ongoing_analysis = false;
 
 //----------------------------------------------------semaphores-----------------------------------------------------------
 
@@ -136,13 +138,13 @@ gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width,
 
 	return obj_return;
 }
-
+/*
 void wa_analyze_image(void){
 	chBSemSignal(&analyze_request_sem);
-}
+}*/
 
 void wa_wait_analysis_done(void){
-	if(ongoing_analysis) chBSemWait(&analysis_done_sem);
+	/*if(ongoing_analysis)*/ chBSemWait(&analysis_done_sem);
 }
 
 void wa_camera_enable(bool enable){
@@ -238,7 +240,15 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 	if (start-step==0) return 0;
 	width += step;
 
+	center_offset = size/2 - (start + width/2);
+	found_object = (width <= 10)? false : true;
+
 	return width;
+}
+
+bool wa_getObject(int16_t *offset){
+	*offset = center_offset;
+	return found_object;
 }
 
 uint16_t get_mean(uint16_t * values, uint16_t new_value, uint16_t i) {
@@ -285,10 +295,10 @@ static THD_FUNCTION(ProcessImage, arg) {
 
     while(1){
     	//waits until a request is made
-    	chBSemWait(&analyze_request_sem);
-    	ongoing_analysis = true;
+    	//chBSemWait(&analyze_request_sem);
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
+    	//ongoing_analysis = true;
 
 		//gets the pointer to the array filled with the last image in RGB565
 		img_buff_ptr = dcmi_get_last_image_ptr();
@@ -307,9 +317,9 @@ static THD_FUNCTION(ProcessImage, arg) {
 		(void)r_width;
 		(void)b_width;
 		//chprintf((BaseSequentialStream *)&SD3, "Width = %d mm \r", g_width);
-		//SendUint8ToComputer(green,IMAGE_BUFFER_SIZE);
+		//SendUint8ToComputer(blue,IMAGE_BUFFER_SIZE);
 
-		ongoing_analysis = false;
+		//ongoing_analysis = false;
 		chBSemSignal(&analysis_done_sem);
     }
 }

@@ -20,14 +20,15 @@
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
-#define CUSTOM_ANGLE	1.114f	//Angle to make 4 motor steps
-#define COMPLETE_TURN	324	  	//Number of custom angles to make a full turn
+//#define CUSTOM_ANGLE	1.114f	//Angle to make 4 motor steps
+#define COMPLETE_TURN	360	  	//Number of custom angles to make a full turn
 #define MAX_ANGLE		162	  	//Half a turn in custom angles
 
 #define ACQUISITION_MVT_SPEED	3	//Speed at which to rotate
-#define ACQUISITION_ANGLE_STEP	10*CUSTOM_ANGLE 	//Angle in degrees to rotate between analysis
+//#define ACQUISITION_ANGLE_STEP	10*CUSTOM_ANGLE 	//Angle in degrees to rotate between analysis
 
 #define DEG2RAD M_PI/161.58	//Custom angles to radians
+
 //--------------------------------------------------static variables-------------------------------------------------------
 
 //------------------------------------------private functions declarations-------------------------------------------------
@@ -63,7 +64,8 @@ static THD_FUNCTION(ConveyorBot, arg) {
     systime_t time;
 
     gameState_t state = ACQUISITION;
-    uint16_t acquisition_angle = 0;
+    int16_t offset = 0;
+    bool found_object = false;
 
     mvt_calibrate();
 
@@ -72,25 +74,24 @@ static THD_FUNCTION(ConveyorBot, arg) {
 
     	switch(state){
     	case ACQUISITION :
-    		wa_wait_analysis_done();
-    		wa_analyze_image();
-
     		//The robot rotates while the analysis is done
-    		mvt_rotate(360, 3);
-    		int16_t truc = mvt_get_angle();
-    		chprintf((BaseSequentialStream *)&SD3, " Angle = %d \r",truc);
-    		update_coor(obj_pos,0,ACQUISITION_ANGLE_STEP);
+    		if(!found_object) mvt_rotate(COMPLETE_TURN, ACQUISITION_MVT_SPEED);
+    		wa_wait_analysis_done();
 
-    		//chThdSleepMilliseconds(1000);
-    		acquisition_angle++;
-    		//The robot makes a full 360� rotation before changing state
-    		//if(acquisition_angle >= COMPLETE_TURN/ACQUISITION_ANGLE_STEP) state++;
+    		found_object = wa_getObject(&offset);
+    		if(found_object){
+    			mvt_stop();
+    			if(abs(offset) > 50){
+    				mvt_rotate(offset/abs(offset), ACQUISITION_MVT_SPEED);
+    				mvt_wait_end_of_movement();
+    				//chprintf((BaseSequentialStream *)&SD3, "Centered ! \r");
+    			}
+    		}
+
     		break;
     	case TAKE_OBJECT_1 :
     	case TAKE_OBJECT_2 :
     	case TAKE_OBJECT_3 :
-    		wa_wait_analysis_done();
-    		wa_analyze_image();
     		//palTogglePad(GPIOD, GPIOD_LED_FRONT);
     		//chThdSleepMilliseconds(500);
     		break;
