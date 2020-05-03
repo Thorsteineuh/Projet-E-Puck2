@@ -2,9 +2,11 @@
 #include "hal.h"
 #include <chprintf.h>
 #include <usbcfg.h>
-
+#include <sensors/VL53L0X/Api/core/inc/vl53l0x_api.h>
+#include "shell.h"
+#include "chprintf.h"
+#include "i2c_bus.h"
 #include <main.h>
-#include <math.h>
 #include <camera/po8030.h>
 
 #include <world_analysis.h>
@@ -35,6 +37,9 @@ static int16_t center_offset = 0;
 static gameObject_t facing_object;
 static uint16_t facing_dist;
 //static bool ongoing_analysis = false;
+
+static uint16_t dist_mm = 0;
+static bool VL53L0X_configured = false;
 
 //----------------------------------------------------semaphores-----------------------------------------------------------
 
@@ -272,6 +277,39 @@ void wa_store_object(position_t *obj_pos, int16_t angle){
 	obj_pos[facing_object].dist = facing_dist;
 }
 
+static THD_WORKING_AREA(waVL53L0XThd, 512);
+static THD_FUNCTION(VL53L0XThd, arg) {
+
+	chRegSetThreadName("VL53L0x Thd");
+	VL53L0X_Error status = VL53L0X_ERROR_NONE;
+
+	(void)arg;
+	static VL53L0X_Dev_t device;
+
+	device.I2cDevAddr = VL53L0X_ADDR;
+
+	status = VL53L0X_init(&device);
+
+	if(status == VL53L0X_ERROR_NONE){
+		VL53L0X_configAccuracy(&device, VL53L0X_DEFAULT_MODE);
+	}
+	if(status == VL53L0X_ERROR_NONE){
+		VL53L0X_startMeasure(&device, VL53L0X_DEVICEMODE_CONTINUOUS_RANGING);
+	}
+	if(status == VL53L0X_ERROR_NONE){
+		VL53L0X_configured = true;
+	}
+
+    /* Reader thread loop.*/
+    while (chThdShouldTerminateX() == false) {
+    	if(VL53L0X_configured){
+    		VL53L0X_getLastMeasure(&device);
+   			dist_mm = device.Data.LastRangeMeasure.RangeMilliMeter;
+    	}
+		chThdSleepMilliseconds(100);
+    }
+}
+
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
 
@@ -330,7 +368,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 		bool rg_same = abs(r_width-g_width) < WIDTH_MAX_ERROR;
 		bool gb_same = abs(g_width-b_width) < WIDTH_MAX_ERROR;
 		bool br_same = abs(b_width-r_width) < WIDTH_MAX_ERROR;
-		if(rg_same && gb_same && br_same) get_facing_object_and_distance(VL53L0X_get_dist_mm(), g_width, &facing_dist);
+		if(rg_same && gb_same && br_same) get_facing_object_and_distance(dist_mm, g_width, &facing_dist);
 
 		(void)r_width;
 		(void)b_width;
@@ -344,12 +382,13 @@ static THD_FUNCTION(ProcessImage, arg) {
 
 void world_analysis_start(void){
 
-	VL53L0X_start();
+	i2c_start();
     dcmi_start();
 	po8030_start();
 
 	camera_enabled = true;
 
+	chThdCreateStatic(waVL53L0XThd, sizeof(waVL53L0XThd), NORMALPRIO + 10, VL53L0XThd, NULL);
 	chThdCreateStatic(waProcessImage, sizeof(waProcessImage), NORMALPRIO, ProcessImage, NULL);
 	chThdCreateStatic(waCaptureImage, sizeof(waCaptureImage), NORMALPRIO, CaptureImage, NULL);
 }
