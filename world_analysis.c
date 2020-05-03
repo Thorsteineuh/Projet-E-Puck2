@@ -32,8 +32,10 @@
 //--------------------------------------------------static variables-------------------------------------------------------
 
 static bool camera_enabled = true;
+
 static bool found_object = false;
 static int16_t center_offset = 0;
+
 static gameObject_t facing_object;
 static uint16_t facing_dist;
 //static bool ongoing_analysis = false;
@@ -147,10 +149,6 @@ gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width,
 
 	return obj_return;
 }
-/*
-void wa_analyze_image(void){
-	chBSemSignal(&analyze_request_sem);
-}*/
 
 void wa_wait_analysis_done(void){
 	/*if(ongoing_analysis)*/ chBSemWait(&analysis_done_sem);
@@ -230,10 +228,7 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 		if (moyen<mean) step++;
 		else break;
 	}
-	if (start+step==size){
-		found_object = false;
-		return 0;
-	}
+	if (start+step==size) return 0;
 	width += step - 3;
 
 	step = 4;
@@ -250,14 +245,10 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 		if (moyen<mean) step++;
 		else break;
 	}
-	if (start-step==0){
-		found_object = false;
-		return 0;
-	}
+	if (start-step==0) return 0;
 	width += step;
 
 	center_offset = (start-step+width/2)-size/2;
-	found_object = (width <= 10)? false : true;
 
 	return width;
 }
@@ -361,14 +352,29 @@ static THD_FUNCTION(ProcessImage, arg) {
 			red[i/2]	= *(img_buff_ptr + i) >> 3;				//isolate the red channel
 		}
 
+		found_object = false;
+		center_offset = 0;
+
 		uint16_t r_width = image_analysis(red, IMAGE_BUFFER_SIZE);
 		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE);
 		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE);
 
-		bool rg_same = abs(r_width-g_width) < WIDTH_MAX_ERROR;
-		bool gb_same = abs(g_width-b_width) < WIDTH_MAX_ERROR;
-		bool br_same = abs(b_width-r_width) < WIDTH_MAX_ERROR;
-		if(rg_same && gb_same && br_same) get_facing_object_and_distance(dist_mm, g_width, &facing_dist);
+		if(r_width > WIDTH_MAX_ERROR || g_width > WIDTH_MAX_ERROR || b_width > WIDTH_MAX_ERROR){
+			bool rg_same = abs(r_width-g_width) < WIDTH_MAX_ERROR;
+			bool gb_same = abs(g_width-b_width) < WIDTH_MAX_ERROR;
+			bool br_same = abs(b_width-r_width) < WIDTH_MAX_ERROR;
+			if(rg_same && gb_same && br_same) get_facing_object_and_distance(VL53L0X_get_dist_mm(), g_width, &facing_dist);
+			else if(gb_same && !rg_same && !br_same){ //Red channel is different from the others
+				facing_object = RED_TGT;
+				facing_dist = 350;
+			}else if(br_same && !rg_same && !gb_same){ //Green channel is different from the others
+				facing_object = GREEN_TGT;
+				facing_dist = 350;
+			}else if(rg_same && !gb_same && !br_same){ //Blue channel is different from the others
+				facing_object = BLUE_TGT;
+				facing_dist = 350;
+			}else facing_object = NO_OBJECT;
+		}else facing_object = NO_OBJECT;
 
 		(void)r_width;
 		(void)b_width;
