@@ -8,7 +8,7 @@
 //-------------------------------------------------------defines-------------------------------------------------------
 
 #define NSTEP_ONE_TURN      	1000 // number of steps for 1 turn of the motor
-#define MOTOR_MIN_SPEED_STEP   	230  // [step/s]
+#define MOTOR_MIN_SPEED_STEP   	150  // [step/s] avant : 230 = 2.99cm/s
 #define MOTOR_MIN_SPEED_CM   	2.99f // [cm/s]
 
 #define WHEEL_PERIMETER     	13 // [cm]

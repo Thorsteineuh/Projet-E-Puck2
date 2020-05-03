@@ -14,8 +14,8 @@
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
-#define VAL_THRES 20
-#define WIDTH_MAX_ERROR 15
+#define VAL_THRES 5
+#define WIDTH_MAX_ERROR 40
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -158,7 +158,7 @@ void wa_camera_enable(bool enable){
 	camera_enabled = enable;
 }
 
-uint16_t image_analysis(uint8_t* canal, uint16_t size){
+uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 
 	uint8_t mean = 0;
 	uint8_t min = 32;
@@ -172,7 +172,11 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 
 	if (max-min < VAL_THRES) return 0;		//s'il n'y a pas de creux ignorer - thres a definir
 
-	mean = (min + max)/4;				//magic num
+	/*if(!is_green) mean = min + (max-min)/2;				//magic num
+	else  mean = min + (max-min)/4;*/
+	if(color == 0)mean = 6;
+	if(color == 1)mean = 9;
+	if(color == 2)mean = 7;
 
 	uint16_t start = -1;
 	uint16_t moyen;
@@ -246,9 +250,9 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 		else break;
 	}
 	if (start-step==0) return 0;
-	width += step;
+	width += step-4;
 
-	center_offset = (start-step+width/2)-size/2;
+	if(width > WIDTH_MAX_ERROR) center_offset = (start-step+width/2)-size/2;
 
 	return width;
 }
@@ -297,7 +301,7 @@ static THD_FUNCTION(VL53L0XThd, arg) {
     		VL53L0X_getLastMeasure(&device);
    			dist_mm = device.Data.LastRangeMeasure.RangeMilliMeter;
     	}
-		chThdSleepMilliseconds(100);
+		chThdSleepMilliseconds(50);
     }
 }
 
@@ -309,6 +313,9 @@ static THD_FUNCTION(CaptureImage, arg) {
 
 	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 240 + 241 (minimum 2 lines because reasons)
 	po8030_advanced_config(FORMAT_RGB565, 0, 240, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
+	//po8030_set_ae(0); //Disable auto exposure
+	po8030_set_awb(0);//Disable auto white balance
+	//po8030_set_exposure(50,0);
 	dcmi_enable_double_buffering();
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
 	dcmi_prepare();
@@ -348,38 +355,41 @@ static THD_FUNCTION(ProcessImage, arg) {
 		for(int i = 0; i < IMAGE_BUFFER_SIZE*2; i += 2){
 			blue[i/2]	= *(img_buff_ptr + i + 1) & 0b11111;	//isolate the blue channel
 			green[i/2]	= *(img_buff_ptr + i + 1) >> 5;			//isolate the green channel (3 LSB)
-			green[i/2] += (*(img_buff_ptr + i) & 0b111) << 5;	//isolate the green channel (3 MSB)
+			green[i/2] += (*(img_buff_ptr + i) & 0b111) << 3;	//isolate the green channel (3 MSB)
 			red[i/2]	= *(img_buff_ptr + i) >> 3;				//isolate the red channel
 		}
 
 		found_object = false;
 		center_offset = 0;
 
-		uint16_t r_width = image_analysis(red, IMAGE_BUFFER_SIZE);
-		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE);
-		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE);
+		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE, 2);
+		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE, 1);
+		uint16_t r_width = image_analysis(red, IMAGE_BUFFER_SIZE, 0);
 
 		if(r_width > WIDTH_MAX_ERROR || g_width > WIDTH_MAX_ERROR || b_width > WIDTH_MAX_ERROR){
 			bool rg_same = abs(r_width-g_width) < WIDTH_MAX_ERROR;
 			bool gb_same = abs(g_width-b_width) < WIDTH_MAX_ERROR;
 			bool br_same = abs(b_width-r_width) < WIDTH_MAX_ERROR;
-			if(rg_same && gb_same && br_same) get_facing_object_and_distance(VL53L0X_get_dist_mm(), g_width, &facing_dist);
-			else if(gb_same && !rg_same && !br_same){ //Red channel is different from the others
+			if(rg_same && gb_same && br_same){
+				found_object = true;
+				get_facing_object_and_distance(VL53L0X_get_dist_mm(), g_width, &facing_dist);
+			}else if(gb_same && !rg_same && !br_same){ //Red channel is different from the others
 				facing_object = RED_TGT;
+				found_object = true;
 				facing_dist = 350;
 			}else if(br_same && !rg_same && !gb_same){ //Green channel is different from the others
 				facing_object = GREEN_TGT;
+				found_object = true;
 				facing_dist = 350;
 			}else if(rg_same && !gb_same && !br_same){ //Blue channel is different from the others
 				facing_object = BLUE_TGT;
+				found_object = true;
 				facing_dist = 350;
 			}else facing_object = NO_OBJECT;
 		}else facing_object = NO_OBJECT;
 
-		(void)r_width;
-		(void)b_width;
-		//chprintf((BaseSequentialStream *)&SD3, "Width = %d mm \r", g_width);
-		SendUint8ToComputer(blue,IMAGE_BUFFER_SIZE);
+		//chprintf((BaseSequentialStream *)&SD3, "R = %d G = %d B = %d \r",r_width, g_width, b_width);
+		//SendUint8ToComputer(green,IMAGE_BUFFER_SIZE);
 
 		//ongoing_analysis = false;
 		chBSemSignal(&analysis_done_sem);

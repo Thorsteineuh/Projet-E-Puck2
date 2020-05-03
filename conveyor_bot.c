@@ -81,7 +81,8 @@ static THD_FUNCTION(ConveyorBot, arg) {
     		found_object = wa_getObject(&offset);
     		if(found_object){
     			mvt_stop();
-    			if(abs(offset) > 10){
+    			chprintf((BaseSequentialStream *)&SD3, "Offset %d \r",offset);
+    			if(abs(offset) > 15){
     				mvt_rotate(-offset/abs(offset), ACQUISITION_MVT_SPEED);
     				mvt_wait_end_of_movement();
     				//chprintf((BaseSequentialStream *)&SD3, "Centered ! \r");
