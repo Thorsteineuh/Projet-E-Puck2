@@ -3,8 +3,10 @@
 
 #include <conveyor_bot.h>
 
-//void wa_analyze_image(void);
 bool wa_getObject(int16_t *offset);
+
+void wa_store_object(position_t *obj_pos, int16_t angle);
+
 void wa_wait_analysis_done(void);
 
 void wa_camera_enable(bool enable);

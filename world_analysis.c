@@ -13,6 +13,7 @@
 //-----------------------------------------------------defines-------------------------------------------------------------
 
 #define VAL_THRES 20
+#define WIDTH_MAX_ERROR 15
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -31,6 +32,8 @@
 static bool camera_enabled = true;
 static bool found_object = false;
 static int16_t center_offset = 0;
+static gameObject_t facing_object;
+static uint16_t facing_dist;
 //static bool ongoing_analysis = false;
 
 //----------------------------------------------------semaphores-----------------------------------------------------------
@@ -222,7 +225,10 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 		if (moyen<mean) step++;
 		else break;
 	}
-	if (start+step==size) return 0;
+	if (start+step==size){
+		found_object = false;
+		return 0;
+	}
 	width += step - 3;
 
 	step = 4;
@@ -239,10 +245,13 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 		if (moyen<mean) step++;
 		else break;
 	}
-	if (start-step==0) return 0;
+	if (start-step==0){
+		found_object = false;
+		return 0;
+	}
 	width += step;
 
-	center_offset = abs(size/2 - start) + width/2;
+	center_offset = (start-step+width/2)-size/2;
 	found_object = (width <= 10)? false : true;
 
 	return width;
@@ -256,6 +265,11 @@ bool wa_getObject(int16_t *offset){
 uint16_t get_mean(uint16_t * values, uint16_t new_value, uint16_t i) {
 	values[i%4] = new_value/4;
 	return values[0] + values[1] + values[2] + values[3];
+}
+
+void wa_store_object(position_t *obj_pos, int16_t angle){
+	obj_pos[facing_object].angle = angle;
+	obj_pos[facing_object].dist = facing_dist;
 }
 
 static THD_WORKING_AREA(waCaptureImage, 256);
@@ -296,11 +310,8 @@ static THD_FUNCTION(ProcessImage, arg) {
 	uint8_t *img_buff_ptr;
 
     while(1){
-    	//waits until a request is made
-    	//chBSemWait(&analyze_request_sem);
     	//waits until an image has been captured
         chBSemWait(&image_ready_sem);
-    	//ongoing_analysis = true;
 
 		//gets the pointer to the array filled with the last image in RGB565
 		img_buff_ptr = dcmi_get_last_image_ptr();
@@ -316,10 +327,15 @@ static THD_FUNCTION(ProcessImage, arg) {
 		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE);
 		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE);
 
+		bool rg_same = abs(r_width-g_width) < WIDTH_MAX_ERROR;
+		bool gb_same = abs(g_width-b_width) < WIDTH_MAX_ERROR;
+		bool br_same = abs(b_width-r_width) < WIDTH_MAX_ERROR;
+		if(rg_same && gb_same && br_same) get_facing_object_and_distance(VL53L0X_get_dist_mm(), g_width, &facing_dist);
+
 		(void)r_width;
 		(void)b_width;
 		//chprintf((BaseSequentialStream *)&SD3, "Width = %d mm \r", g_width);
-		//SendUint8ToComputer(blue,IMAGE_BUFFER_SIZE);
+		SendUint8ToComputer(blue,IMAGE_BUFFER_SIZE);
 
 		//ongoing_analysis = false;
 		chBSemSignal(&analysis_done_sem);
