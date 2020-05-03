@@ -4,6 +4,7 @@
 #include <usbcfg.h>
 
 #include <main.h>
+#include <math.h>
 #include <camera/po8030.h>
 
 #include <world_analysis.h>
@@ -199,8 +200,8 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 		temp4 = canal[i];
 		moyen = (temp1 + temp2 + temp3 + temp4)/4;
 
-		if ((moyen<mean)&&(start-size/2>size/2-i)) {
-			start = i;
+		if ((moyen<mean)&&(start-size/2>size/2-i+4)) {
+			start = i + 4;
 			break;
 		}
 	}
@@ -223,6 +224,7 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 	}
 	if (start+step==size) return 0;
 	width += step - 3;
+
 	step = 4;
 	temp2 = canal[start-1];
 	temp3 = canal[start-2];
@@ -240,7 +242,7 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size){
 	if (start-step==0) return 0;
 	width += step;
 
-	center_offset = size/2 - (start + width/2);
+	center_offset = abs(size/2 - start) + width/2;
 	found_object = (width <= 10)? false : true;
 
 	return width;
