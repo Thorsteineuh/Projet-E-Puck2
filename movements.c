@@ -9,15 +9,18 @@
 
 #define NSTEP_ONE_TURN      	1000 // number of steps for 1 turn of the motor
 #define MOTOR_MIN_SPEED_STEP   	150  // [step/s] avant : 230 = 2.99cm/s
-#define MOTOR_MIN_SPEED_CM   	2.99f // [cm/s]
+//#define MOTOR_MIN_SPEED_CM   	2.99f // [cm/s]
 
 #define WHEEL_PERIMETER     	13 // [cm]
 #define WHEEL_DISTANCE     	 	5.35f    //cm
 #define PI                 	 	3.1415926536f
 #define EPUCK_R_PERIMETER		WHEEL_DISTANCE*PI // Perimeter of one E-Puck2 rotation
 
+#define FULL_TURN				360
+#define MAX_ANGLE				180
+#define DIFF_STEPS_PER_DEGREE	7.2f
 
-#define TURN_COEF				PI/180
+//#define TURN_COEF				PI/180
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -31,10 +34,6 @@ static bool ongoing_mvt = false;
 static int32_t r_stepCnt = 0;
 static int32_t l_stepCnt = 0;
 
-//----------------------------------------------------semaphores-----------------------------------------------------------
-
-static BSEMAPHORE_DECL(end_of_movement_sem, TRUE);
-
 //----------------------------------------------------functions------------------------------------------------------------
 
 void mvt_stop(void)
@@ -46,7 +45,6 @@ void mvt_stop(void)
 	l_stepCnt = 0;
 
 	ongoing_mvt = false;
-	chBSemSignal(&end_of_movement_sem);
 }
 
 void mvt_set_speed(float speed_r, float speed_l)
@@ -119,15 +117,15 @@ int16_t mvt_get_angle(void){
 
 	int32_t diff = right_motor_get_pos() - left_motor_get_pos();
 
-	float angle = (diff/7.2);
-	while(angle>180)angle-=360;
-	while(angle<-180)angle+=360;
+	float angle = (diff/DIFF_STEPS_PER_DEGREE);
+	while(angle>MAX_ANGLE)angle-=FULL_TURN;
+	while(angle<-MAX_ANGLE)angle+=FULL_TURN;
 
 	return (int16_t) angle;
 }
 
 void mvt_wait_end_of_movement(void){
-	if(ongoing_mvt) chBSemWait(&end_of_movement_sem);
+	while(ongoing_mvt) chThdSleepMilliseconds(50);
 }
 
 /**
@@ -166,10 +164,7 @@ static THD_FUNCTION(MotorRegulation, arg) {
 				left_motor_set_speed(0);
 				left_done = true;
 			}
-			if(right_done && left_done){
-				ongoing_mvt = false;
-				chBSemSignal(&end_of_movement_sem);
-			}
+			if(right_done && left_done) ongoing_mvt = false;
     	}
 
 		r_oldPos = rPos;

@@ -8,13 +8,14 @@
 #include "i2c_bus.h"
 #include <main.h>
 #include <camera/po8030.h>
+#include <selector.h>
 
 #include <world_analysis.h>
 #include <sensors/VL53L0X/VL53L0X.h>
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
-#define VAL_THRES 5
+//#define VAL_THRES 5
 #define WIDTH_MAX_ERROR 40
 
 //------------------------------------------------------macros-------------------------------------------------------------
@@ -43,10 +44,12 @@ static uint16_t facing_dist;
 static uint16_t dist_mm = 0;
 static bool VL53L0X_configured = false;
 
+static uint8_t cnt = 0;
+
 //----------------------------------------------------semaphores-----------------------------------------------------------
 
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
-static BSEMAPHORE_DECL(analyze_request_sem, TRUE);
+//static BSEMAPHORE_DECL(analyze_request_sem, TRUE);
 static BSEMAPHORE_DECL(analysis_done_sem, TRUE);
 
 //------------------------------------------private functions declarations-------------------------------------------------
@@ -170,7 +173,7 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 		if(canal[i] > max) max = canal[i];
 	}
 
-	if (max-min < VAL_THRES) return 0;		//s'il n'y a pas de creux ignorer - thres a definir
+	//if (max-min < VAL_THRES) return 0;		//s'il n'y a pas de creux ignorer - thres a definir
 
 	/*if(!is_green) mean = min + (max-min)/2;				//magic num
 	else  mean = min + (max-min)/4;*/
@@ -252,7 +255,10 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 	if (start-step==0) return 0;
 	width += step-4;
 
-	if(width > WIDTH_MAX_ERROR) center_offset = (start-step+width/2)-size/2;
+	if(width > WIDTH_MAX_ERROR){
+		found_object = true;
+		center_offset = (start-step+width/2)-size/2;
+	}
 
 	return width;
 }
@@ -268,8 +274,13 @@ uint16_t get_mean(uint16_t * values, uint16_t new_value, uint16_t i) {
 }
 
 void wa_store_object(position_t *obj_pos, int16_t angle){
+	if(cnt<3){
+		facing_object =cnt;
+		cnt++;
+	}
 	obj_pos[facing_object].angle = angle;
-	obj_pos[facing_object].dist = facing_dist;
+	obj_pos[facing_object].dist = facing_dist+35;
+	if(get_selector()==5)chprintf((BaseSequentialStream *)&SD3, "Object : %d Dist : %d Angle : %d \r",facing_object, facing_dist, angle);
 }
 
 static THD_WORKING_AREA(waVL53L0XThd, 512);
@@ -359,12 +370,18 @@ static THD_FUNCTION(ProcessImage, arg) {
 			red[i/2]	= *(img_buff_ptr + i) >> 3;				//isolate the red channel
 		}
 
+		facing_object = NO_OBJECT;
 		found_object = false;
 		center_offset = 0;
 
+		uint8_t selec = get_selector(); //----------------------------------------------------------------sddfbdfd
+
 		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE, 2);
+		if(selec == 0) chprintf((BaseSequentialStream *)&SD3, "red : found %d offset %d \r",found_object, center_offset);
 		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE, 1);
+		if(selec == 0) chprintf((BaseSequentialStream *)&SD3, "green : found %d offset %d \r",found_object, center_offset);
 		uint16_t r_width = image_analysis(red, IMAGE_BUFFER_SIZE, 0);
+		if(selec == 0) chprintf((BaseSequentialStream *)&SD3, "blue : found %d offset %d \n\n\r",found_object, center_offset);
 
 		if(r_width > WIDTH_MAX_ERROR || g_width > WIDTH_MAX_ERROR || b_width > WIDTH_MAX_ERROR){
 			bool rg_same = abs(r_width-g_width) < WIDTH_MAX_ERROR;
@@ -372,8 +389,8 @@ static THD_FUNCTION(ProcessImage, arg) {
 			bool br_same = abs(b_width-r_width) < WIDTH_MAX_ERROR;
 			if(rg_same && gb_same && br_same){
 				found_object = true;
-				get_facing_object_and_distance(VL53L0X_get_dist_mm(), g_width, &facing_dist);
-			}else if(gb_same && !rg_same && !br_same){ //Red channel is different from the others
+				facing_object = get_facing_object_and_distance(dist_mm, g_width, &facing_dist);
+			}else /*if(gb_same && !rg_same && !br_same){ //Red channel is different from the others
 				facing_object = RED_TGT;
 				found_object = true;
 				facing_dist = 350;
@@ -385,11 +402,17 @@ static THD_FUNCTION(ProcessImage, arg) {
 				facing_object = BLUE_TGT;
 				found_object = true;
 				facing_dist = 350;
-			}else facing_object = NO_OBJECT;
+			}else facing_object = NO_OBJECT;*/{
+				found_object = true;
+				facing_object = NO_OBJECT;
+				facing_dist = 350-30;
+			}
 		}else facing_object = NO_OBJECT;
 
-		//chprintf((BaseSequentialStream *)&SD3, "R = %d G = %d B = %d \r",r_width, g_width, b_width);
-		//SendUint8ToComputer(green,IMAGE_BUFFER_SIZE);
+		if(selec == 1) chprintf((BaseSequentialStream *)&SD3, "R = %d G = %d B = %d \r",r_width, g_width, b_width);
+		if(selec == 2) SendUint8ToComputer(red,IMAGE_BUFFER_SIZE);
+		if(selec == 3) SendUint8ToComputer(green,IMAGE_BUFFER_SIZE);
+		if(selec == 4) SendUint8ToComputer(blue,IMAGE_BUFFER_SIZE);
 
 		//ongoing_analysis = false;
 		chBSemSignal(&analysis_done_sem);
