@@ -44,8 +44,6 @@ static uint16_t facing_dist;
 static uint16_t dist_mm = 0;
 static bool VL53L0X_configured = false;
 
-static uint8_t cnt = 0;
-
 //----------------------------------------------------semaphores-----------------------------------------------------------
 
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
@@ -177,9 +175,9 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 
 	/*if(!is_green) mean = min + (max-min)/2;				//magic num
 	else  mean = min + (max-min)/4;*/
-	if(color == 0)mean = 6;
-	if(color == 1)mean = 9;
-	if(color == 2)mean = 7;
+	if(color == 0)mean = max/2;
+	if(color == 1)mean = max/4;
+	if(color == 2)mean = max/2;
 
 	uint16_t start = -1;
 	uint16_t moyen;
@@ -274,10 +272,6 @@ uint16_t get_mean(uint16_t * values, uint16_t new_value, uint16_t i) {
 }
 
 void wa_store_object(position_t *obj_pos, int16_t angle){
-	if(cnt<3){
-		facing_object =cnt;
-		cnt++;
-	}
 	obj_pos[facing_object].angle = angle;
 	obj_pos[facing_object].dist = facing_dist+35;
 	if(get_selector()==5)chprintf((BaseSequentialStream *)&SD3, "Object : %d Dist : %d Angle : %d \r",facing_object, facing_dist, angle);
@@ -383,31 +377,35 @@ static THD_FUNCTION(ProcessImage, arg) {
 		uint16_t r_width = image_analysis(red, IMAGE_BUFFER_SIZE, 0);
 		if(selec == 0) chprintf((BaseSequentialStream *)&SD3, "blue : found %d offset %d \n\n\r",found_object, center_offset);
 
-		if(r_width > WIDTH_MAX_ERROR || g_width > WIDTH_MAX_ERROR || b_width > WIDTH_MAX_ERROR){
-			bool rg_same = abs(r_width-g_width) < WIDTH_MAX_ERROR;
-			bool gb_same = abs(g_width-b_width) < WIDTH_MAX_ERROR;
-			bool br_same = abs(b_width-r_width) < WIDTH_MAX_ERROR;
-			if(rg_same && gb_same && br_same){
-				found_object = true;
-				facing_object = get_facing_object_and_distance(dist_mm, g_width, &facing_dist);
-			}else /*if(gb_same && !rg_same && !br_same){ //Red channel is different from the others
-				facing_object = RED_TGT;
-				found_object = true;
-				facing_dist = 350;
-			}else if(br_same && !rg_same && !gb_same){ //Green channel is different from the others
-				facing_object = GREEN_TGT;
-				found_object = true;
-				facing_dist = 350;
-			}else if(rg_same && !gb_same && !br_same){ //Blue channel is different from the others
-				facing_object = BLUE_TGT;
-				found_object = true;
-				facing_dist = 350;
-			}else facing_object = NO_OBJECT;*/{
-				found_object = true;
-				facing_object = NO_OBJECT;
-				facing_dist = 350-30;
-			}
-		}else facing_object = NO_OBJECT;
+
+		bool r_hole = r_width > WIDTH_MAX_ERROR;
+		bool g_hole = g_width > WIDTH_MAX_ERROR;
+		bool b_hole = b_width > WIDTH_MAX_ERROR;
+
+		if(r_hole && g_hole && b_hole){
+			//Black object
+			found_object = true;
+			facing_object = get_facing_object_and_distance(dist_mm, g_width, &facing_dist);
+		}else if(!r_hole && g_hole && b_hole){
+			//Red object
+			facing_object = RED_TGT;
+			found_object = true;
+			facing_dist = 300;
+		}else if(r_hole && !g_hole && b_hole){
+			//Green object
+			facing_object = GREEN_TGT;
+			found_object = true;
+			facing_dist = 300;
+		}else if(r_hole && !g_hole && !b_hole){
+			//Cyan object
+			facing_object = BLUE_TGT;
+			found_object = true;
+			facing_dist = 300;
+		}else {
+			//Not recognized color
+			found_object = false;
+			facing_object = NO_OBJECT;
+		}
 
 		if(selec == 1) chprintf((BaseSequentialStream *)&SD3, "R = %d G = %d B = %d \r",r_width, g_width, b_width);
 		if(selec == 2) SendUint8ToComputer(red,IMAGE_BUFFER_SIZE);

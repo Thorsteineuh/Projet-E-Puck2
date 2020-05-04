@@ -30,32 +30,54 @@
 
 #define E_PUCK_RADIUS 40
 
-#define DEG2RAD M_PI/180	//Degrees to radians coef
+//------------------------------------------------------macros-------------------------------------------------------------
+
+#define DEG2RAD(x) M_PI*(x)/180
+#define RAD2DEG(x) 180*(x)/M_PI
 
 //--------------------------------------------------static variables-------------------------------------------------------
 
 //------------------------------------------private functions declarations-------------------------------------------------
 
-void update_coor(position_t * tableau, uint16_t dist, int16_t angle);
-
-//----------------------------------------------------functions------------------------------------------------------------
-
-void update_coor(position_t * tableau, uint16_t dist, int16_t angle) {
-	for (int8_t i = 0; i < NB_GAMEOBJECT; i++) {
-		if (angle == 0) {
-			uint16_t D = tableau[i].dist;
-			float32_t theta = tableau[i].angle * DEG2RAD;
-			float Dp = sqrt(dist*dist + D*D - 2*dist*D*arm_cos_f32(theta));
-			tableau[i].dist = Dp;
-			float value = (D*D + Dp*Dp - dist*dist)/(2*D*Dp);
-			float valeur = acos(value) / DEG2RAD;
-			if (theta * dist >= 0) tableau[i].angle += (int16_t) valeur;
-			else tableau[i].angle -= (int16_t)valeur;
-		} else if (dist == 0) tableau[i].angle += angle;
-	}
+void update_coordinates(position_t * tableau, int16_t dist, int16_t angle);
+void printcoor(position_t * tableau){
 	for(uint8_t i = 0; i < NB_GAMEOBJECT; i++){
 		chprintf((BaseSequentialStream *)&SD3, "Obj %d dist %d angle %d \r",i,tableau[i].dist,tableau[i].angle);
 	}chprintf((BaseSequentialStream *)&SD3, "\n \n \n \r");
+}
+
+//----------------------------------------------------functions------------------------------------------------------------
+
+void update_coordinates(position_t * tableau, int16_t dist, int16_t angle) {
+	for (int8_t i = 0; i < NB_GAMEOBJECT; i++) {
+		chprintf((BaseSequentialStream *)&SD3, "Obj %d \rAncien : dist %d angle %d \r",i,tableau[i].dist,tableau[i].angle);
+		if (angle == 0) {
+			//Movement is linear, calculation via cosine theorem
+			float newDist;
+			int16_t newAngle;
+			if(dist >= 0){
+				uint16_t oldDist = tableau[i].dist;
+				float cosOldA = cosf(DEG2RAD(tableau[i].angle));
+				newDist = sqrt(oldDist*oldDist + dist*dist - 2*dist*oldDist*cosOldA);
+				float newAngleComp = RAD2DEG(acosf((dist-oldDist*cosOldA)/newDist));
+				newAngle = (int16_t) (180-newAngleComp);
+			}else {
+				uint16_t oldDist = tableau[i].dist;
+				float cosCompOldA = cosf(DEG2RAD(180-abs(tableau[i].angle)));
+				newDist = sqrt(oldDist*oldDist + dist*dist + 2*dist*oldDist*cosCompOldA);
+				newAngle = RAD2DEG(acosf((-dist-oldDist*cosCompOldA)/newDist));
+			}
+			if(tableau[i].angle < 0) newAngle = -abs(newAngle);
+			else newAngle = abs(newAngle);
+			tableau[i].angle = newAngle;
+			tableau[i].dist = (uint16_t) newDist;
+		} else if(dist == 0){
+			tableau[i].angle -= angle;
+			while(tableau[i].angle > MAX_ANGLE) tableau[i].angle -= COMPLETE_TURN;
+			while(tableau[i].angle < -MAX_ANGLE) tableau[i].angle += COMPLETE_TURN;
+		}
+		chprintf((BaseSequentialStream *)&SD3, "Nouveau : %d dist %d angle %d \r\r",i,tableau[i].dist,tableau[i].angle);
+	}chprintf((BaseSequentialStream *)&SD3, "\r \r \r");
 }
 
 /**
@@ -98,7 +120,7 @@ static THD_FUNCTION(ConveyorBot, arg) {
     	time = chVTGetSystemTime();
 
     	switch(state){
-    	case ACQUISITION :{
+    	case ACQUISITION :{wa_wait_analysis_done();
     		//The robot looks around to find the gameObjects
 			current_angle = mvt_get_angle();
 			turn_complete = current_angle < 0 && current_angle > -5;
@@ -110,7 +132,7 @@ static THD_FUNCTION(ConveyorBot, arg) {
 				}
 				if(all_obj){
 					state++;
-					update_coor(obj_pos,0,-mvt_get_angle());
+					update_coordinates(obj_pos,0,mvt_get_angle());
 					object = SMALL_OBJ;
 					target = RED_TGT;
 				}
@@ -144,12 +166,13 @@ static THD_FUNCTION(ConveyorBot, arg) {
     	case TAKE_OBJECT_1 :
     	case TAKE_OBJECT_2 :
     	case TAKE_OBJECT_3 :{
+    		//printcoor(obj_pos);
     		mvt_rotate(obj_pos[object].angle,3);
-    		update_coor(obj_pos,0,-obj_pos[object].angle);
+    		update_coordinates(obj_pos,0,obj_pos[object].angle);
     		mvt_wait_end_of_movement();
 
     		mvt_move((obj_pos[object].dist-E_PUCK_RADIUS-radius[object-3])/10,3);
-    		update_coor(obj_pos,obj_pos[object].dist-E_PUCK_RADIUS-radius[object-3],0);
+    		update_coordinates(obj_pos,obj_pos[object].dist-E_PUCK_RADIUS-radius[object-3],0);
 			mvt_wait_end_of_movement();
     		state++;
     		break;
@@ -157,16 +180,17 @@ static THD_FUNCTION(ConveyorBot, arg) {
     	case MOVE_TO_TARGET_1 :
     	case MOVE_TO_TARGET_2 :
     	case MOVE_TO_TARGET_3 :{
+    		//printcoor(obj_pos);
     		mvt_rotate(obj_pos[target].angle,3);
-			update_coor(obj_pos,0,-obj_pos[target].angle);
+    		update_coordinates(obj_pos,0,obj_pos[target].angle);
 			mvt_wait_end_of_movement();
 
 			mvt_move((obj_pos[target].dist-E_PUCK_RADIUS-radius[object-3])/10,3);
-			update_coor(obj_pos,obj_pos[target].dist-E_PUCK_RADIUS-radius[object-3],0);
+			update_coordinates(obj_pos,obj_pos[target].dist-E_PUCK_RADIUS-radius[object-3],0);
 			mvt_wait_end_of_movement();
 
 			mvt_move(-6,3);
-			update_coor(obj_pos,-60,0);
+			update_coordinates(obj_pos,-60,0);
 			mvt_wait_end_of_movement();
 
 			object++;
