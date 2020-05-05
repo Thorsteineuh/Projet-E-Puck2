@@ -32,6 +32,15 @@ int16_t wa_getOffset(void);
 void wa_store_object(position_t *obj_pos, int16_t angle);
 
 /**
+* @brief 	Manages the moving average with a cyclic storage
+*
+* @param values			Table of previous values
+* @param new_value		new value
+* @param i				index needed for the remainder calculation
+*/
+uint8_t get_mean(uint8_t * values, uint8_t new_value, uint16_t i);
+
+/**
 * @brief 	Initialization of the analysis threads
 */
 void world_analysis_start(void);

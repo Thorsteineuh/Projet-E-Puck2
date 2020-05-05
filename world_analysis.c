@@ -24,6 +24,7 @@ typedef enum{ //Camera channel colors
 #define WIDTH_MAX_ERROR 40
 #define E_PUCK_RADIUS	35 		//Distance between center of rotation and camera [mm]
 #define TARGETS_DIST	280 	//Distance between tip of the claw and wall [mm]
+#define MOV_AVG_SIZE 4
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -165,8 +166,8 @@ gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width,
 
 uint16_t image_analysis(uint8_t* channel, uint16_t size, color_t color){
 
-	uint8_t mean = 0;
-	uint8_t min = 32;
+	uint8_t threshold = 0;
+	uint8_t min = -1;
 	uint8_t max = 0;
 
 
@@ -175,94 +176,75 @@ uint16_t image_analysis(uint8_t* channel, uint16_t size, color_t color){
 		if(channel[i] > max) max = channel[i];
 	}
 
-	//if (max-min < VAL_THRES) return 0;		//s'il n'y a pas de creux ignorer - thres a definir
-
-	/*if(!is_green) mean = min + (max-min)/2;				//magic num
-	else  mean = min + (max-min)/4;*/
-	if(color == 0)mean = max/2;
-	if(color == 1)mean = max/4;
-	if(color == 2)mean = max/2;
+	if(color == RED)  threshold = max/2;
+	if(color == GREEN)threshold = max/4;		//different threshold for each channel
+	if(color == BLUE) threshold = max/2;
 
 	uint16_t start = -1;
-	uint16_t moyen;
-	uint16_t temp1;
-	uint16_t temp2 = channel[size/2];
-	uint16_t temp3 = channel[size/2+1];
-	uint16_t temp4 = channel[size/2+2];
+	//array for the moving average on four values
+	uint8_t temp[MOV_AVG_SIZE] = {channel[size/2], channel[size+1/2], channel[size+2/2], 0};
 
-
-	for(uint16_t i = size/2 + 3; i < size; i++){
-		temp1 = temp2;
-		temp2 = temp3;
-		temp3 = temp4;
-		temp4 = channel[i];
-		moyen = (temp1 + temp2 + temp3 + temp4)/4;
-
-		if (moyen<mean) {
-			start = i - 3;
+	//check if there is a dip in intensity to the right of the center
+	for(uint16_t i = size/2 + MOV_AVG_SIZE - 1; i < size; i++){
+		if (get_mean(temp, channel[i], i)<threshold) {
+			start = i - MOV_AVG_SIZE + 1;
 			break;
 		}
 	}
 
-	temp2 = channel[size/2-1];
-	temp3 = channel[size/2-2];
-	temp4 = channel[size/2-3];
+	//check if there is a dip in intensity to the left of the center
 
-	for(uint16_t i = size/2 - 4; i > 0; i--){
-		temp1 = temp2;
-		temp2 = temp3;
-		temp3 = temp4;
-		temp4 = channel[i];
-		moyen = (temp1 + temp2 + temp3 + temp4)/4;
-
-		if ((moyen<mean)&&(start-size/2>size/2-i+4)) {
-			start = i + 4;
+	//fills the array with the first values for the moving average
+	temp[1] = channel[size/2-1];
+	temp[2] = channel[size/2-2];
+	temp[3] = channel[size/2-3];
+	//if this dip is nearer than the right one, choose this one
+	for(uint16_t i = size/2 - MOV_AVG_SIZE; i > 0; i--){
+		if ((get_mean(temp, channel[i], i)<threshold)&&(start-size/2 > size/2-i + MOV_AVG_SIZE)) {
+			start = i + MOV_AVG_SIZE;
 			break;
 		}
 	}
 
-	uint16_t step = 3;
+	//store the number of steps to the right to reach an edge
+	uint16_t step = MOV_AVG_SIZE - 1;
 	uint16_t width = 0;
-	temp2 = channel[start];
-	temp3 = channel[start+1];
-	temp4 = channel[start+2];
+	temp[0] = channel[start];
+	temp[1] = channel[start+1];
+	temp[2] = channel[start+2];
 
 	while (start+step<size) {
-		temp1 = temp2;
-		temp2 = temp3;
-		temp3 = temp4;
-		temp4 = channel[start+step];
-		moyen = (temp1 + temp2 + temp3 + temp4)/4;
-
-		if (moyen<mean) step++;
+		if (get_mean(temp, channel[start+step], step)<threshold) step++;
 		else break;
 	}
 	if (start+step==size) return 0;
-	width += step - 3;
+	width += step - MOV_AVG_SIZE + 1;
 
-	step = 4;
-	temp2 = channel[start-1];
-	temp3 = channel[start-2];
-	temp4 = channel[start-3];
+	//store the number of steps to the left to reach an edge (left+right)=width
+	step = MOV_AVG_SIZE;
+	temp[1] = channel[start-1];
+	temp[2] = channel[start-2];
+	temp[3] = channel[start-3];
 
 	while (start-step>0) {
-		temp1 = temp2;
-		temp2 = temp3;
-		temp3 = temp4;
-		temp4 = channel[start-step];
-		moyen = (temp1 + temp2 + temp3 + temp4)/4;
-		if (moyen<mean) step++;
+		if (get_mean(temp, channel[start-step], step)<threshold) step++;
 		else break;
 	}
 	if (start-step==0) return 0;
-	width += step-4;
+	width += step - MOV_AVG_SIZE;
 
+	//if a large enough dip was found, there is an object
 	if(width > WIDTH_MAX_ERROR){
 		found_object = true;
 		center_offset = (start-step+width/2)-size/2;
 	}
 
 	return width;
+}
+
+uint8_t get_mean(uint8_t * values, uint8_t new_value, uint16_t i) {
+	values[i % MOV_AVG_SIZE] = new_value;
+	return (values[0] + values[1] + values[2] + values[3])/MOV_AVG_SIZE;
 }
 
 
