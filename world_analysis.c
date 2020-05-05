@@ -1,17 +1,12 @@
 #include "ch.h"
 #include "hal.h"
-#include <chprintf.h>
-#include <usbcfg.h>
-#include <sensors/VL53L0X/Api/core/inc/vl53l0x_api.h>
-#include "shell.h"
-#include "chprintf.h"
-#include "i2c_bus.h"
+
 #include <main.h>
 #include <camera/po8030.h>
-#include <selector.h>
+#include <sensors/VL53L0X/VL53L0X.h>
+#include "i2c_bus.h"
 
 #include <world_analysis.h>
-#include <sensors/VL53L0X/VL53L0X.h>
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
