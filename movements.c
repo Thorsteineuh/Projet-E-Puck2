@@ -25,6 +25,7 @@
 //------------------------------------------------------macros-------------------------------------------------------------
 
 #define CM2STEPS(x)		NSTEP_ONE_TURN*(x)/WHEEL_PERIMETER
+#define MM2STEPS(x)		CM2STEPS(x)/10
 #define ANGLE2STEPS(x)	CM2STEPS(EPUCK_R_PERIMETER*(x)/360)
 
 //--------------------------------------------------static variables-------------------------------------------------------
@@ -93,7 +94,7 @@ bool mvt_move(float dist, float speed){
 	if(ongoing_mvt) return false;
 	ongoing_mvt = true;
 
-	float steps = CM2STEPS(dist);
+	float steps = MM2STEPS(dist);
 
 	mvt_set_position((int) steps, (int) steps, speed, speed);
 

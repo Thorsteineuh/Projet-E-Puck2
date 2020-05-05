@@ -23,8 +23,8 @@ typedef enum{
 	SMALL_OBJ,			//Black tube 3 cm in diameter
 	MEDIUM_OBJ,			//Black tube 4 cm in diameter
 	LARGE_OBJ,			//Black tube 5 cm in diameter
-	NB_GAMEOBJECT,		//Number of objects in the playing area
-	NO_OBJECT			//Equivalent to null
+	ORIGIN,			//Equivalent to null
+	NB_GAMEOBJECT		//Number of objects in the playing area
 } gameObject_t;
 
 typedef enum{

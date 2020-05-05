@@ -7,12 +7,10 @@
 #include "ch.h"
 #include "hal.h"
 
-
 #include <chprintf.h>
 #include <usbcfg.h>
 #include <main.h>
 #include <math.h>
-#include <arm_math.h>
 
 #include <conveyor_bot.h>
 #include <movements.h>
@@ -20,15 +18,17 @@
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
-//#define CUSTOM_ANGLE	1.114f	//Angle to make 4 motor steps
-#define COMPLETE_TURN	360
-#define MAX_ANGLE		180
+#define ROTATION_SPEED		3
+#define MOVE_SPEED			6
 
-#define ACQUISITION_MVT_SPEED	3	//Speed at which to rotate
-#define CENTER_MAX_ERROR 10
-//#define ACQUISITION_ANGLE_STEP	10*CUSTOM_ANGLE 	//Angle in degrees to rotate between analysis
+#define CENTER_MAX_ERROR 	10
+#define COMPLETE_TURN		360
+#define MAX_ANGLE			180
+#define E_PUCK_RADIUS 		40
 
-#define E_PUCK_RADIUS 40
+#define SKIP_OBJ_ANGLE		20
+
+#define STABILITY_THRESHOLD	10
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -39,45 +39,75 @@
 
 //------------------------------------------private functions declarations-------------------------------------------------
 
+void center_on_target(void);
+
 void update_coordinates(position_t * tableau, int16_t dist, int16_t angle);
-void printcoor(position_t * tableau){
-	for(uint8_t i = 0; i < NB_GAMEOBJECT; i++){
-		chprintf((BaseSequentialStream *)&SD3, "Obj %d dist %d angle %d \r",i,tableau[i].dist,tableau[i].angle);
-	}chprintf((BaseSequentialStream *)&SD3, "\n \n \n \r");
-}
 
 //----------------------------------------------------functions------------------------------------------------------------
 
+void center_on_target(void){
+
+	mvt_stop();
+
+	bool centered = false;
+	int16_t offset;
+	int8_t stability_cnt = 0;
+
+	while(!centered){
+
+		wa_wait_analysis_done();
+		offset = wa_getOffset();
+
+		if(abs(offset) > CENTER_MAX_ERROR){
+			mvt_rotate(-offset/abs(offset), ROTATION_SPEED);
+			mvt_wait_end_of_movement();
+			stability_cnt = 0;
+		}else {
+			chThdSleepMilliseconds(100); //Wait to be certain the next measure is stable
+			if(stability_cnt == STABILITY_THRESHOLD){
+				//If the robot did not move for the past second : It is centered
+				centered = true;
+			}else stability_cnt++;
+		}
+	}
+}
+
 void update_coordinates(position_t * tableau, int16_t dist, int16_t angle) {
+
 	for (int8_t i = 0; i < NB_GAMEOBJECT; i++) {
-		chprintf((BaseSequentialStream *)&SD3, "Obj %d \rAncien : dist %d angle %d \r",i,tableau[i].dist,tableau[i].angle);
 		if (angle == 0) {
-			//Movement is linear, calculation via cosine theorem
-			float newDist;
+
+			//Change is purely linear, calculation via cosine theorem
+			uint16_t oldDist = tableau[i].dist;
 			int16_t newAngle;
+			float newDist;
+
 			if(dist >= 0){
-				uint16_t oldDist = tableau[i].dist;
 				float cosOldA = cosf(DEG2RAD(tableau[i].angle));
 				newDist = sqrt(oldDist*oldDist + dist*dist - 2*dist*oldDist*cosOldA);
 				float newAngleComp = RAD2DEG(acosf((dist-oldDist*cosOldA)/newDist));
 				newAngle = (int16_t) (180-newAngleComp);
 			}else {
-				uint16_t oldDist = tableau[i].dist;
 				float cosCompOldA = cosf(DEG2RAD(180-abs(tableau[i].angle)));
 				newDist = sqrt(oldDist*oldDist + dist*dist + 2*dist*oldDist*cosCompOldA);
 				newAngle = RAD2DEG(acosf((-dist-oldDist*cosCompOldA)/newDist));
 			}
+
 			if(tableau[i].angle < 0) newAngle = -abs(newAngle);
 			else newAngle = abs(newAngle);
 			tableau[i].angle = newAngle;
 			tableau[i].dist = (uint16_t) newDist;
+
 		} else if(dist == 0){
-			tableau[i].angle -= angle;
-			while(tableau[i].angle > MAX_ANGLE) tableau[i].angle -= COMPLETE_TURN;
-			while(tableau[i].angle < -MAX_ANGLE) tableau[i].angle += COMPLETE_TURN;
+			//Change is a pure rotation
+			if(tableau[i].dist != 0){
+				tableau[i].angle -= angle;
+				while(tableau[i].angle > MAX_ANGLE) tableau[i].angle -= COMPLETE_TURN;
+				while(tableau[i].angle < -MAX_ANGLE) tableau[i].angle += COMPLETE_TURN;
+			}else tableau[i].angle = 0;
 		}
-		chprintf((BaseSequentialStream *)&SD3, "Nouveau : %d dist %d angle %d \r\r",i,tableau[i].dist,tableau[i].angle);
-	}chprintf((BaseSequentialStream *)&SD3, "\r \r \r");
+
+	}chprintf((BaseSequentialStream *)&SD3, "Dist = %d mm\r", tableau[ORIGIN].dist);
 }
 
 /**
@@ -94,7 +124,6 @@ static THD_FUNCTION(ConveyorBot, arg) {
     	obj_pos[i].dist = 0;
     }
 
-    systime_t time;
     gameState_t state = ACQUISITION;
 
     gameObject_t object;
@@ -102,12 +131,17 @@ static THD_FUNCTION(ConveyorBot, arg) {
     object = SMALL_OBJ;
     target = RED_TGT;
 
-    bool found_object = false;
+    //bool found_object = false;
     bool turn_complete = false;
     bool all_obj = false;
-    int16_t offset = 0;
+    //int16_t offset = 0;
     int16_t current_angle = 0;
-    int8_t stability_cnt = 0;
+    //int8_t stability_cnt = 0;
+
+    float drag[3];
+    drag[0] = 1.0014f;
+    drag[1] = 1.0141f;
+    drag[2] = 1.0141f;
 
     uint8_t radius[3];
     radius[0]=15;
@@ -117,17 +151,15 @@ static THD_FUNCTION(ConveyorBot, arg) {
     mvt_calibrate();
 
     while(1){
-    	time = chVTGetSystemTime();
-
     	switch(state){
-    	case ACQUISITION :{wa_wait_analysis_done();
-    		//The robot looks around to find the gameObjects
+    	case ACQUISITION :{ //The robot looks around to find the gameObjects
+
 			current_angle = mvt_get_angle();
 			turn_complete = current_angle < 0 && current_angle > -5;
 			if(turn_complete){
 				mvt_stop();
 				all_obj = true;
-				for(uint8_t i = 0; i < NB_GAMEOBJECT; i++){
+				for(uint8_t i = 0; i < NB_GAMEOBJECT-1; i++){
 				    	if(obj_pos[i].dist <= 15) all_obj = false;
 				}
 				if(all_obj){
@@ -136,42 +168,28 @@ static THD_FUNCTION(ConveyorBot, arg) {
 					object = SMALL_OBJ;
 					target = RED_TGT;
 				}
-				else mvt_set_speed(ACQUISITION_MVT_SPEED, -ACQUISITION_MVT_SPEED);
-			}else if(!found_object) mvt_set_speed(ACQUISITION_MVT_SPEED, -ACQUISITION_MVT_SPEED);
+				else mvt_set_speed(ROTATION_SPEED, -ROTATION_SPEED);
+			}else mvt_set_speed(ROTATION_SPEED, -ROTATION_SPEED);
 
 			wa_wait_analysis_done();
 
-			found_object = wa_getObject(&offset);
-			if(found_object){
-				mvt_stop();
-				if(abs(offset) > CENTER_MAX_ERROR){
-					mvt_rotate(-offset/abs(offset), ACQUISITION_MVT_SPEED);
-					mvt_wait_end_of_movement();
-					stability_cnt = 0;
-				}else {
-					chThdSleepMilliseconds(100); //Wait to be certain the next measure is stable
-					if(stability_cnt ==10){
-						//If the robot did not move for the past second analyzes the object
-						wa_wait_analysis_done();
-						wa_store_object(obj_pos,current_angle);
-						mvt_rotate(20,ACQUISITION_MVT_SPEED);
-						mvt_wait_end_of_movement();
-						found_object = false;
-					}else stability_cnt++;
-				}
+			if(wa_getObject()){
+				center_on_target();
+				wa_store_object(obj_pos,mvt_get_angle());
+				mvt_rotate(SKIP_OBJ_ANGLE,ROTATION_SPEED);
+				mvt_wait_end_of_movement();
 			}
-
 			break;
     	}
     	case TAKE_OBJECT_1 :
     	case TAKE_OBJECT_2 :
     	case TAKE_OBJECT_3 :{
     		//printcoor(obj_pos);
-    		mvt_rotate(obj_pos[object].angle,3);
+    		mvt_rotate(obj_pos[object].angle,ROTATION_SPEED);
     		update_coordinates(obj_pos,0,obj_pos[object].angle);
     		mvt_wait_end_of_movement();
-
-    		mvt_move((obj_pos[object].dist-E_PUCK_RADIUS-radius[object-3])/10,3);
+    		center_on_target();
+    		mvt_move((obj_pos[object].dist-E_PUCK_RADIUS-radius[object-3]),MOVE_SPEED);
     		update_coordinates(obj_pos,obj_pos[object].dist-E_PUCK_RADIUS-radius[object-3],0);
 			mvt_wait_end_of_movement();
     		state++;
@@ -181,15 +199,15 @@ static THD_FUNCTION(ConveyorBot, arg) {
     	case MOVE_TO_TARGET_2 :
     	case MOVE_TO_TARGET_3 :{
     		//printcoor(obj_pos);
-    		mvt_rotate(obj_pos[target].angle,3);
+    		mvt_rotate(obj_pos[target].angle*drag[object-3],ROTATION_SPEED);
     		update_coordinates(obj_pos,0,obj_pos[target].angle);
 			mvt_wait_end_of_movement();
 
-			mvt_move((obj_pos[target].dist-E_PUCK_RADIUS-radius[object-3])/10,3);
+			mvt_move((obj_pos[target].dist-E_PUCK_RADIUS-radius[object-3]),MOVE_SPEED);
 			update_coordinates(obj_pos,obj_pos[target].dist-E_PUCK_RADIUS-radius[object-3],0);
 			mvt_wait_end_of_movement();
 
-			mvt_move(-6,3);
+			mvt_move(-60,MOVE_SPEED);
 			update_coordinates(obj_pos,-60,0);
 			mvt_wait_end_of_movement();
 
@@ -199,10 +217,17 @@ static THD_FUNCTION(ConveyorBot, arg) {
     		break;
     	}
     	case END_OF_TASK :
+    		mvt_rotate(obj_pos[ORIGIN].angle,ROTATION_SPEED);
+    		mvt_wait_end_of_movement();
+    		chprintf((BaseSequentialStream *)&SD3, "Consigne : dist = %d mm\r", obj_pos[ORIGIN].dist);
+    		mvt_move(obj_pos[ORIGIN].dist,MOVE_SPEED);
+    		mvt_wait_end_of_movement();
+    		mvt_set_speed(ROTATION_SPEED,-ROTATION_SPEED);
+    		state++;
+    		break;
+    	default :
     		palTogglePad(GPIOB, GPIOB_LED_BODY);
     		chThdSleepMilliseconds(500);
-    		break;
-    	default : chThdSleepUntilWindowed(time, time + MS2ST(2000));
     	}
 
 

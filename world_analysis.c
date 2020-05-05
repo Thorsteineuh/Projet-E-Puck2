@@ -261,9 +261,12 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 	return width;
 }
 
-bool wa_getObject(int16_t *offset){
-	*offset = center_offset;
+bool wa_getObject(void){
 	return found_object;
+}
+
+int16_t wa_getOffset(void){
+	return center_offset;
 }
 
 uint16_t get_mean(uint16_t * values, uint16_t new_value, uint16_t i) {
@@ -272,9 +275,10 @@ uint16_t get_mean(uint16_t * values, uint16_t new_value, uint16_t i) {
 }
 
 void wa_store_object(position_t *obj_pos, int16_t angle){
+	if(facing_object == ORIGIN) return;
 	obj_pos[facing_object].angle = angle;
 	obj_pos[facing_object].dist = facing_dist+35;
-	if(get_selector()==5)chprintf((BaseSequentialStream *)&SD3, "Object : %d Dist : %d Angle : %d \r",facing_object, facing_dist, angle);
+	//if(get_selector()==5)chprintf((BaseSequentialStream *)&SD3, "Object : %d Dist : %d Angle : %d \r",facing_object, facing_dist, angle);
 }
 
 static THD_WORKING_AREA(waVL53L0XThd, 512);
@@ -364,7 +368,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 			red[i/2]	= *(img_buff_ptr + i) >> 3;				//isolate the red channel
 		}
 
-		facing_object = NO_OBJECT;
+		facing_object = ORIGIN;
 		found_object = false;
 		center_offset = 0;
 
@@ -390,21 +394,21 @@ static THD_FUNCTION(ProcessImage, arg) {
 			//Red object
 			facing_object = RED_TGT;
 			found_object = true;
-			facing_dist = 300;
+			facing_dist = 290;
 		}else if(r_hole && !g_hole && b_hole){
 			//Green object
 			facing_object = GREEN_TGT;
 			found_object = true;
-			facing_dist = 300;
+			facing_dist = 290;
 		}else if(r_hole && !g_hole && !b_hole){
 			//Cyan object
 			facing_object = BLUE_TGT;
 			found_object = true;
-			facing_dist = 300;
+			facing_dist = 290;
 		}else {
 			//Not recognized color
 			found_object = false;
-			facing_object = NO_OBJECT;
+			facing_object = ORIGIN;
 		}
 
 		if(selec == 1) chprintf((BaseSequentialStream *)&SD3, "R = %d G = %d B = %d \r",r_width, g_width, b_width);

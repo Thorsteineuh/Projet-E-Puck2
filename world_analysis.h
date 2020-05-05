@@ -3,7 +3,9 @@
 
 #include <conveyor_bot.h>
 
-bool wa_getObject(int16_t *offset);
+bool wa_getObject(void);
+
+int16_t wa_getOffset(void);
 
 void wa_store_object(position_t *obj_pos, int16_t angle);
 
