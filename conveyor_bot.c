@@ -149,6 +149,7 @@ static THD_FUNCTION(ConveyorBot, arg) {
     radius[2]=25;
 
     mvt_calibrate();
+	wa_camera_enable(true);
 
     while(1){
     	switch(state){
@@ -188,7 +189,11 @@ static THD_FUNCTION(ConveyorBot, arg) {
     		mvt_rotate(obj_pos[object].angle,ROTATION_SPEED);
     		update_coordinates(obj_pos,0,obj_pos[object].angle);
     		mvt_wait_end_of_movement();
+
+    		wa_camera_enable(true);
     		center_on_target();
+    		wa_camera_enable(false); //Disable camera while moving
+
     		mvt_move((obj_pos[object].dist-E_PUCK_RADIUS-radius[object-3]),MOVE_SPEED);
     		update_coordinates(obj_pos,obj_pos[object].dist-E_PUCK_RADIUS-radius[object-3],0);
 			mvt_wait_end_of_movement();

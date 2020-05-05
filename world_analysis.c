@@ -22,7 +22,8 @@ typedef enum{ //Camera channel colors
 } color_t;
 
 #define WIDTH_MAX_ERROR 40
-#define E_PUCK_RADIUS	35 //Distance between center of rotation and camera [mm]
+#define E_PUCK_RADIUS	35 		//Distance between center of rotation and camera [mm]
+#define TARGETS_DIST	280 	//Distance between tip of the claw and wall [mm]
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -267,6 +268,8 @@ uint16_t image_analysis(uint8_t* channel, uint16_t size, color_t color){
 
 void wa_camera_enable(bool enable){
 	camera_enabled = enable;
+	//Takes the semaphore to avoid use of old data
+	if(!enable) chBSemWait(&analysis_done_sem);
 }
 
 void wa_wait_analysis_done(void){
@@ -337,7 +340,7 @@ static THD_FUNCTION(CaptureImage, arg) {
 	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 240 + 241 (Middle of the field of view)
 	po8030_advanced_config(FORMAT_RGB565, 0, 240, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
 
-	po8030_set_awb(0);//Disable auto white balance
+	po8030_set_awb(0); //Disable auto white balance
 
 	dcmi_enable_double_buffering();
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
@@ -356,6 +359,9 @@ static THD_FUNCTION(CaptureImage, arg) {
     }
 }
 
+/*
+ * Thread that analyzes the image and gets the right objects
+ */
 
 static THD_WORKING_AREA(waProcessImage, 1024);
 static THD_FUNCTION(ProcessImage, arg) {
@@ -383,19 +389,15 @@ static THD_FUNCTION(ProcessImage, arg) {
 			red[i/2]	= *(img_buff_ptr + i) >> 3;				//isolate the red channel
 		}
 
+		//Default values if no object is found
 		facing_object = ORIGIN;
 		found_object = false;
 		center_offset = 0;
 
-		uint8_t selec = get_selector(); //----------------------------------------------------------------sddfbdfd
-
-		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE, 2);
-		if(selec == 0) chprintf((BaseSequentialStream *)&SD3, "red : found %d offset %d \r",found_object, center_offset);
-		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE, 1);
-		if(selec == 0) chprintf((BaseSequentialStream *)&SD3, "green : found %d offset %d \r",found_object, center_offset);
-		uint16_t r_width = image_analysis(red, IMAGE_BUFFER_SIZE, 0);
-		if(selec == 0) chprintf((BaseSequentialStream *)&SD3, "blue : found %d offset %d \n\n\r",found_object, center_offset);
-
+		uint16_t b_width = image_analysis(blue, IMAGE_BUFFER_SIZE, BLUE);
+		uint16_t g_width = image_analysis(green, IMAGE_BUFFER_SIZE, GREEN);
+		uint16_t r_width = image_analysis(red, IMAGE_BUFFER_SIZE, RED);
+		//Red is last because it is the most precise
 
 		bool r_hole = r_width > WIDTH_MAX_ERROR;
 		bool g_hole = g_width > WIDTH_MAX_ERROR;
@@ -409,29 +411,23 @@ static THD_FUNCTION(ProcessImage, arg) {
 			//Red object
 			facing_object = RED_TGT;
 			found_object = true;
-			facing_dist = 280;
+			facing_dist = TARGETS_DIST;
 		}else if(r_hole && !g_hole && b_hole){
 			//Green object
 			facing_object = GREEN_TGT;
 			found_object = true;
-			facing_dist = 280;
+			facing_dist = TARGETS_DIST;
 		}else if(r_hole && !g_hole && !b_hole){
 			//Cyan object
 			facing_object = BLUE_TGT;
 			found_object = true;
-			facing_dist = 280;
+			facing_dist = TARGETS_DIST;
 		}else {
 			//Not recognized color
 			found_object = false;
 			facing_object = ORIGIN;
 		}
 
-		if(selec == 1) chprintf((BaseSequentialStream *)&SD3, "R = %d G = %d B = %d \r",r_width, g_width, b_width);
-		if(selec == 2) SendUint8ToComputer(red,IMAGE_BUFFER_SIZE);
-		if(selec == 3) SendUint8ToComputer(green,IMAGE_BUFFER_SIZE);
-		if(selec == 4) SendUint8ToComputer(blue,IMAGE_BUFFER_SIZE);
-
-		//ongoing_analysis = false;
 		chBSemSignal(&analysis_done_sem);
     }
 }
