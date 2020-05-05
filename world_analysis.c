@@ -15,8 +15,14 @@
 
 //-----------------------------------------------------defines-------------------------------------------------------------
 
-//#define VAL_THRES 5
+typedef enum{ //Camera channel colors
+	RED,
+	GREEN,
+	BLUE
+} color_t;
+
 #define WIDTH_MAX_ERROR 40
+#define E_PUCK_RADIUS	35 //Distance between center of rotation and camera [mm]
 
 //------------------------------------------------------macros-------------------------------------------------------------
 
@@ -39,15 +45,13 @@ static int16_t center_offset = 0;
 
 static gameObject_t facing_object;
 static uint16_t facing_dist;
-//static bool ongoing_analysis = false;
 
-static uint16_t dist_mm = 0;
 static bool VL53L0X_configured = false;
+static uint16_t dist_mm = 0;
 
 //----------------------------------------------------semaphores-----------------------------------------------------------
 
 static BSEMAPHORE_DECL(image_ready_sem, TRUE);
-//static BSEMAPHORE_DECL(analyze_request_sem, TRUE);
 static BSEMAPHORE_DECL(analysis_done_sem, TRUE);
 
 //------------------------------------------private functions declarations-------------------------------------------------
@@ -84,11 +88,20 @@ uint16_t get_camera_trueDist_mm(uint16_t object_width, gameObject_t object);
 */
 gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width, uint16_t *dist_return);
 
+/**
+* @brief 	Searches the image given by the camera for gameObjects
+*
+* @param channel		Array of values from one color channel
+* @param size			Size of the array
+* @param color			The color of the given channel
+*
+* @return	width of the dent in the values if any
+*/
+uint16_t image_analysis(uint8_t* channel, uint16_t size, color_t color);
+
 //----------------------------------------------------functions------------------------------------------------------------
 
 uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object){
-
-	if(object <= BLUE_TGT) return 0;
 
 	if(object == SMALL_OBJ){
 		float dist = TOF_TRUEDIST_SMALL(tof_mm);
@@ -103,8 +116,6 @@ uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object){
 }
 
 uint16_t get_camera_trueDist_mm(uint16_t object_width, gameObject_t object){
-
-	if(object <= BLUE_TGT) return 0;
 
 	if(object == SMALL_OBJ){
 		float dist = CAMERA_TRUEDIST_SMALL(object_width);
@@ -151,15 +162,7 @@ gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width,
 	return obj_return;
 }
 
-void wa_wait_analysis_done(void){
-	/*if(ongoing_analysis)*/ chBSemWait(&analysis_done_sem);
-}
-
-void wa_camera_enable(bool enable){
-	camera_enabled = enable;
-}
-
-uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
+uint16_t image_analysis(uint8_t* channel, uint16_t size, color_t color){
 
 	uint8_t mean = 0;
 	uint8_t min = 32;
@@ -167,8 +170,8 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 
 
 	for(uint16_t i = 0; i < size; i++){			//finding the smallest and biggest values
-		if(canal[i] < min) min = canal[i];
-		if(canal[i] > max) max = canal[i];
+		if(channel[i] < min) min = channel[i];
+		if(channel[i] > max) max = channel[i];
 	}
 
 	//if (max-min < VAL_THRES) return 0;		//s'il n'y a pas de creux ignorer - thres a definir
@@ -182,16 +185,16 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 	uint16_t start = -1;
 	uint16_t moyen;
 	uint16_t temp1;
-	uint16_t temp2 = canal[size/2];
-	uint16_t temp3 = canal[size/2+1];
-	uint16_t temp4 = canal[size/2+2];
+	uint16_t temp2 = channel[size/2];
+	uint16_t temp3 = channel[size/2+1];
+	uint16_t temp4 = channel[size/2+2];
 
 
 	for(uint16_t i = size/2 + 3; i < size; i++){
 		temp1 = temp2;
 		temp2 = temp3;
 		temp3 = temp4;
-		temp4 = canal[i];
+		temp4 = channel[i];
 		moyen = (temp1 + temp2 + temp3 + temp4)/4;
 
 		if (moyen<mean) {
@@ -200,15 +203,15 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 		}
 	}
 
-	temp2 = canal[size/2-1];
-	temp3 = canal[size/2-2];
-	temp4 = canal[size/2-3];
+	temp2 = channel[size/2-1];
+	temp3 = channel[size/2-2];
+	temp4 = channel[size/2-3];
 
 	for(uint16_t i = size/2 - 4; i > 0; i--){
 		temp1 = temp2;
 		temp2 = temp3;
 		temp3 = temp4;
-		temp4 = canal[i];
+		temp4 = channel[i];
 		moyen = (temp1 + temp2 + temp3 + temp4)/4;
 
 		if ((moyen<mean)&&(start-size/2>size/2-i+4)) {
@@ -219,15 +222,15 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 
 	uint16_t step = 3;
 	uint16_t width = 0;
-	temp2 = canal[start];
-	temp3 = canal[start+1];
-	temp4 = canal[start+2];
+	temp2 = channel[start];
+	temp3 = channel[start+1];
+	temp4 = channel[start+2];
 
 	while (start+step<size) {
 		temp1 = temp2;
 		temp2 = temp3;
 		temp3 = temp4;
-		temp4 = canal[start+step];
+		temp4 = channel[start+step];
 		moyen = (temp1 + temp2 + temp3 + temp4)/4;
 
 		if (moyen<mean) step++;
@@ -237,15 +240,15 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 	width += step - 3;
 
 	step = 4;
-	temp2 = canal[start-1];
-	temp3 = canal[start-2];
-	temp4 = canal[start-3];
+	temp2 = channel[start-1];
+	temp3 = channel[start-2];
+	temp4 = channel[start-3];
 
 	while (start-step>0) {
 		temp1 = temp2;
 		temp2 = temp3;
 		temp3 = temp4;
-		temp4 = canal[start-step];
+		temp4 = channel[start-step];
 		moyen = (temp1 + temp2 + temp3 + temp4)/4;
 		if (moyen<mean) step++;
 		else break;
@@ -261,6 +264,15 @@ uint16_t image_analysis(uint8_t* canal, uint16_t size, uint8_t color){
 	return width;
 }
 
+
+void wa_camera_enable(bool enable){
+	camera_enabled = enable;
+}
+
+void wa_wait_analysis_done(void){
+	chBSemWait(&analysis_done_sem);
+}
+
 bool wa_getObject(void){
 	return found_object;
 }
@@ -269,18 +281,16 @@ int16_t wa_getOffset(void){
 	return center_offset;
 }
 
-uint16_t get_mean(uint16_t * values, uint16_t new_value, uint16_t i) {
-	values[i%4] = new_value/4;
-	return values[0] + values[1] + values[2] + values[3];
-}
-
 void wa_store_object(position_t *obj_pos, int16_t angle){
+	//If the detected object is the origin, there was a problem in the detection
 	if(facing_object == ORIGIN) return;
 	obj_pos[facing_object].angle = angle;
-	obj_pos[facing_object].dist = facing_dist+35;
-	//if(get_selector()==5)chprintf((BaseSequentialStream *)&SD3, "Object : %d Dist : %d Angle : %d \r",facing_object, facing_dist, angle);
+	obj_pos[facing_object].dist = facing_dist+E_PUCK_RADIUS;
 }
 
+/*
+ * Custom thread to control the mode and update frequency of the ToF sensor
+*/
 static THD_WORKING_AREA(waVL53L0XThd, 512);
 static THD_FUNCTION(VL53L0XThd, arg) {
 
@@ -314,17 +324,21 @@ static THD_FUNCTION(VL53L0XThd, arg) {
     }
 }
 
+/*
+ * Thread to take 2 lines of visual data in the middle of the camera field of view
+ */
+
 static THD_WORKING_AREA(waCaptureImage, 256);
 static THD_FUNCTION(CaptureImage, arg) {
 
     chRegSetThreadName(__FUNCTION__);
     (void)arg;
 
-	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 240 + 241 (minimum 2 lines because reasons)
+	//Takes pixels 0 to IMAGE_BUFFER_SIZE of the line 240 + 241 (Middle of the field of view)
 	po8030_advanced_config(FORMAT_RGB565, 0, 240, IMAGE_BUFFER_SIZE, 2, SUBSAMPLING_X1, SUBSAMPLING_X1);
-	//po8030_set_ae(0); //Disable auto exposure
+
 	po8030_set_awb(0);//Disable auto white balance
-	//po8030_set_exposure(50,0);
+
 	dcmi_enable_double_buffering();
 	dcmi_set_capture_mode(CAPTURE_ONE_SHOT);
 	dcmi_prepare();
@@ -341,6 +355,7 @@ static THD_FUNCTION(CaptureImage, arg) {
     	} else chThdSleepMilliseconds(1000);
     }
 }
+
 
 static THD_WORKING_AREA(waProcessImage, 1024);
 static THD_FUNCTION(ProcessImage, arg) {
@@ -394,17 +409,17 @@ static THD_FUNCTION(ProcessImage, arg) {
 			//Red object
 			facing_object = RED_TGT;
 			found_object = true;
-			facing_dist = 290;
+			facing_dist = 280;
 		}else if(r_hole && !g_hole && b_hole){
 			//Green object
 			facing_object = GREEN_TGT;
 			found_object = true;
-			facing_dist = 290;
+			facing_dist = 280;
 		}else if(r_hole && !g_hole && !b_hole){
 			//Cyan object
 			facing_object = BLUE_TGT;
 			found_object = true;
-			facing_dist = 290;
+			facing_dist = 280;
 		}else {
 			//Not recognized color
 			found_object = false;
@@ -420,6 +435,7 @@ static THD_FUNCTION(ProcessImage, arg) {
 		chBSemSignal(&analysis_done_sem);
     }
 }
+
 
 void world_analysis_start(void){
 
