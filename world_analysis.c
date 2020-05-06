@@ -96,6 +96,15 @@ gameObject_t get_facing_object_and_distance(uint16_t tof_mm, uint16_t cam_width,
 */
 uint16_t image_analysis(uint8_t* channel, uint16_t size, color_t color);
 
+/**
+* @brief 	Manages the moving average with a cyclic buffer
+*
+* @param values			Table of previous values
+* @param new_value		new value
+* @param i				index needed for the remainder calculation
+*/
+uint8_t get_mean(uint8_t * values, uint8_t new_value, uint16_t i);
+
 //----------------------------------------------------functions------------------------------------------------------------
 
 uint16_t get_ToF_trueDist_mm(uint16_t tof_mm, gameObject_t object){
