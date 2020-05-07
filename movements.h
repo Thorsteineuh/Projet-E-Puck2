@@ -1,8 +1,5 @@
-#ifndef MOTOR_H
-#define MOTOR_H
-
-
-#include <stdlib.h>
+#ifndef MOVEMENTS_H
+#define MOVEMENTS_H
 
 /**
 * @brief   Stops the robot movements immediately
@@ -70,4 +67,4 @@ void mvt_wait_end_of_movement(void);
 void mvt_init(void);
 
 
-#endif /* MOTOR_H */
+#endif /* MOVEMENTS_H */

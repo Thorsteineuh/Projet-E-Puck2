@@ -1,5 +1,5 @@
-#ifndef PROCESS_IMAGE_H
-#define PROCESS_IMAGE_H
+#ifndef WORLD_ANALYSIS_H
+#define WORLD_ANALYSIS_H
 
 #include <conveyor_bot.h>
 
@@ -36,4 +36,4 @@ void wa_store_object(position_t *obj_pos, int16_t angle);
 */
 void world_analysis_start(void);
 
-#endif /* PROCESS_IMAGE_H */
+#endif /* WORLD_ANALYSIS_H */

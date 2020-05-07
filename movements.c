@@ -1,6 +1,8 @@
 #include "ch.h"
 #include "hal.h"
 
+#include <stdlib.h>
+
 #include <motors.h>
 #include <movements.h>
 
