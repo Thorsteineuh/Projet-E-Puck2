@@ -102,6 +102,8 @@ uint16_t image_analysis(uint8_t* channel, uint16_t size, color_t color);
 * @param values			Table of previous values
 * @param new_value		new value
 * @param i				index needed for the remainder calculation
+*
+* @return	current mean
 */
 uint8_t get_mean(uint8_t * values, uint8_t new_value, uint16_t i);
 
