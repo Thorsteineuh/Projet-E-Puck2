@@ -38,6 +38,9 @@ typedef enum{
 	END_OF_TASK			//Nothing left to do. A dance maybe ?
 } gameState_t;
 
+/*
+ * @brief	Initializes all the necessary threads
+ */
 void conveyor_bot_init(void);
 
 #endif /* CONVEYOR_BOT_H_ */

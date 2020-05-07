@@ -2,7 +2,6 @@
 #include "hal.h"
 
 #include <motors.h>
-#include <chprintf.h>
 #include <movements.h>
 
 //-------------------------------------------------------defines-------------------------------------------------------
