@@ -18,7 +18,7 @@ typedef enum{ //Camera channel colors
 
 #define WIDTH_MAX_ERROR 40
 #define E_PUCK_RADIUS	35 		//Distance between center of rotation and camera [mm]
-#define TARGETS_DIST	280 	//Distance between tip of the claw and wall [mm]
+#define TARGETS_DIST	270 	//Distance between tip of the claw and wall when in center [mm]
 #define MOV_AVG_SIZE 4
 
 //------------------------------------------------------macros-------------------------------------------------------------
@@ -34,6 +34,8 @@ typedef enum{ //Camera channel colors
 #define CAMERA_TRUEDIST_LARGE(x) 35700/(x)
 
 //--------------------------------------------------static variables-------------------------------------------------------
+
+static thread_t *tof_Thd;
 
 static bool camera_enabled = true;
 
@@ -429,7 +431,13 @@ void world_analysis_start(void){
 
 	camera_enabled = true;
 
-	chThdCreateStatic(waVL53L0XThd, sizeof(waVL53L0XThd), NORMALPRIO + 10, VL53L0XThd, NULL);
+	tof_Thd = chThdCreateStatic(waVL53L0XThd, sizeof(waVL53L0XThd), NORMALPRIO + 10, VL53L0XThd, NULL);
 	chThdCreateStatic(waProcessImage, sizeof(waProcessImage), NORMALPRIO, ProcessImage, NULL);
 	chThdCreateStatic(waCaptureImage, sizeof(waCaptureImage), NORMALPRIO, CaptureImage, NULL);
+}
+
+void wa_stop_tof(void) {
+    chThdTerminate(tof_Thd);
+    chThdWait(tof_Thd);
+    tof_Thd = NULL;
 }

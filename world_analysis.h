@@ -36,4 +36,9 @@ void wa_store_object(position_t *obj_pos, int16_t angle);
 */
 void world_analysis_start(void);
 
+/*
+ * @brief	Terminates the ToF thread
+ */
+void wa_stop_tof(void);
+
 #endif /* WORLD_ANALYSIS_H */

@@ -41,9 +41,9 @@ typedef enum{
 #define ROTATION_SPEED	3
 #define MOVE_SPEED		6
 
-#define SMALL_DRAG		1.0014f
-#define MEDIUM_DRAG		1.0141f
-#define LARGE_DRAG		1.0141f
+#define SMALL_DRAG		1.0028f
+#define MEDIUM_DRAG		1.0177f
+#define LARGE_DRAG		1.0148f
 
 #define CENTER_MAX_ERROR 	10
 
@@ -168,7 +168,6 @@ static THD_FUNCTION(ConveyorBot, arg) {
     while(1){
     	switch(state){
     	case ACQUISITION :{ //The robot looks around to find the gameObjects
-
     		int16_t current_angle = mvt_get_angle();
 			bool turn_complete = current_angle < 0 && current_angle > -COMPLETE_TURN_ERROR;
 
@@ -182,6 +181,7 @@ static THD_FUNCTION(ConveyorBot, arg) {
 					state++;
 					//Sets all coordinates to be relative to the robot's position
 					update_coordinates(obj_pos, 0, mvt_get_angle());
+					wa_stop_tof();
 				}
 				else mvt_set_speed(ROTATION_SPEED, -ROTATION_SPEED);
 			}else mvt_set_speed(ROTATION_SPEED, -ROTATION_SPEED);
