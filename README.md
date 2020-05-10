@@ -1,2 +1,2 @@
-# Projet-E-Puck2
-Le projet à  faire avec un robot qui finalement fonctionne !
+# Projet-E-Puck2 : Conveyor bot
+Auteurs : Léo Duggan et Hadrien Sprumont
